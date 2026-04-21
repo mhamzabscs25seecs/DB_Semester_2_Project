@@ -1,5 +1,6 @@
 package stopwatch;
 
+import dao.UserDAO;      // The Data access object we created for this
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -156,13 +157,25 @@ public class LoginScreen extends JFrame {
     private void handleLogin() {
         String user = usernameField.getText().trim();
         String pass = new String(passwordField.getPassword()).trim();
+
         if (user.isEmpty() || pass.isEmpty()) {
             shake(usernameField.getParent().getParent());
-            JOptionPane.showMessageDialog(this, "Please fill in all fields.", "Clixky", JOptionPane.ERROR_MESSAGE);
+            showCyberError("Missing Data", "Please fill in all fields.");
             return;
         }
-        // TODO: Replace with real UserDAO.login(user, pass) check
-        if (onLoginSuccess != null) onLoginSuccess.run();
+
+        UserDAO userDAO = new UserDAO();
+        UserDAO.LoggedInUser loggedInUser = userDAO.login (user, pass);
+
+        // If the user is not found, it is null
+        if (loggedInUser == null) {
+            showCyberError("Access Denied", "Invalid username or password.");
+            return;
+        }
+
+        if (onLoginSuccess != null)
+            onLoginSuccess.run();
+
     }
 
     // ── Helpers ──────────────────────────────────────────────
@@ -271,6 +284,50 @@ public class LoginScreen extends JFrame {
             public void mouseExited(MouseEvent e)  { b.setForeground(fg); }
         });
         return b;
+    }
+
+    private void showCyberError(String title, String message) {
+        JDialog dialog = new JDialog(this, "Clixky Alert", true);
+        dialog.setSize(360, 210);
+        dialog.setLocationRelativeTo(this);
+        dialog.setResizable(false);
+        dialog.setUndecorated(true);
+
+        JPanel panel = new RoundPanel(14, BG_PANEL, NEON_PINK);
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createEmptyBorder(24, 28, 22, 28));
+
+        JLabel icon = new JLabel("!");
+        icon.setAlignmentX(Component.CENTER_ALIGNMENT);
+        icon.setHorizontalAlignment(SwingConstants.CENTER);
+        icon.setFont(new Font("Segoe UI", Font.BOLD, 30));
+        icon.setForeground(NEON_PINK);
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        titleLabel.setForeground(NEON_PINK);
+
+        JLabel messageLabel = new JLabel(message);
+        messageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        messageLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        messageLabel.setForeground(TEXT_MAIN);
+
+        JButton okButton = makeButton("TRY AGAIN", BG_CARD, NEON_CYAN, BORDER_COL);
+        okButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        okButton.setMaximumSize(new Dimension(180, 38));
+        okButton.addActionListener(e -> dialog.dispose());
+
+        panel.add(icon);
+        panel.add(Box.createVerticalStrut(8));
+        panel.add(titleLabel);
+        panel.add(Box.createVerticalStrut(8));
+        panel.add(messageLabel);
+        panel.add(Box.createVerticalStrut(22));
+        panel.add(okButton);
+
+        dialog.setContentPane(panel);
+        dialog.setVisible(true);
     }
 
     static void shake(Component c) {

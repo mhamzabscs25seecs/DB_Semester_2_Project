@@ -81,14 +81,14 @@ INSERT INTO Posts (post_id, posted_by, community_id, title, body, created_at, up
 
 INSERT INTO Comments (comment_id, post_id, commenter_id, comment_body, commented_at, updated_at, parent_comment_id) VALUES
 (1, 1, 1, 'HikariCP is a solid option in Java projects.', '2026-02-01 09:10:00', NULL, NULL),
-(2, 1, 3, 'Also keep transaction scope small for better throughput.', '2026-02-01 09:22:00', NULL, NULL),
+(2, 1, 3, 'Also keep transaction scope small for better throughput.', '2026-02-01 09:22:00', '2026-02-01 09:35:00', NULL),
 (3, 1, 2, 'Thanks, I will benchmark both suggestions.', '2026-02-01 09:45:00', NULL, 1),
-(4, 2, 8, 'SQLite is great to learn schema design quickly.', '2026-02-01 11:00:00', NULL, NULL),
-(5, 2, 6, 'Move to PostgreSQL when you need advanced concurrency.', '2026-02-01 11:30:00', NULL, NULL),
+(4, 2, 1, 'Start with SQLite, but practice joins and constraints from day one.', '2026-02-01 12:05:00', NULL, NULL),
+(5, 4, 6, 'Precision, recall, and F1 score are useful first checks.', '2026-02-02 13:25:00', '2026-02-02 13:40:00', 10),
 (6, 5, 3, 'Start by identifying repeating groups for 1NF.', '2026-02-03 09:00:00', NULL, NULL),
 (7, 5, 1, 'Then remove partial dependencies for 2NF.', '2026-02-03 09:20:00', NULL, 6),
 (8, 8, 5, 'Index columns used in WHERE and JOIN clauses first.', '2026-02-05 17:05:00', NULL, NULL),
-(9, 8, 2, 'Measure query plans before and after adding indexes.', '2026-02-05 17:20:00', NULL, 8),
+(9, 8, 2, 'Measure query plans before and after adding indexes.', '2026-02-05 17:20:00', '2026-02-05 17:32:00', 8),
 (10, 4, 8, 'Accuracy alone can mislead on imbalanced datasets.', '2026-02-02 13:00:00', NULL, NULL);
 
 INSERT INTO Post_Votes (vote_id, post_id, user_id, vote_type) VALUES
