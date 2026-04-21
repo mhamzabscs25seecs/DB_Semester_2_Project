@@ -1,4 +1,4 @@
-package stopwatch;
+package ui;
 
 import dao.UserDAO;      // The Data access object we created for this
 import javax.swing.*;

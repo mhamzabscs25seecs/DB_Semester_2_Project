@@ -1,4 +1,4 @@
-package stopwatch;
+package ui;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -6,7 +6,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.List;
 import java.util.ArrayList;
-import static stopwatch.LoginScreen.*;
+import static ui.LoginScreen.*;
 
 /**
  * CommentPanel renders a single comment node with its children indented below it.

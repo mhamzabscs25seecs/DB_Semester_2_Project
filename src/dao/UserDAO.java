@@ -35,7 +35,7 @@ public class UserDAO {
         String sql = """
                SELECT user_id, username, email
                FROM Users
-               WHERE username = ? AND password = ?
+               WHERE username = ? AND password_hash = ?
                """;
         /* Note that we do not give the User input directly to the SQL String because it can lead to
          SQL Injection which is a security vulnerability where an attacker can manipulate the SQL
