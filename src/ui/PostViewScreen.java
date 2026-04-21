@@ -1,4 +1,4 @@
-package stopwatch;
+package ui;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -6,8 +6,8 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList; // Added import for ArrayList
 import java.util.List;
-import static stopwatch.LoginScreen.*;
-import static stopwatch.DashboardScreen.*;
+import static ui.LoginScreen.*;
+import static ui.DashboardScreen.*;
 
 public class PostViewScreen extends JFrame {
 

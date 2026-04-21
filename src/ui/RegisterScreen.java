@@ -1,9 +1,9 @@
-package stopwatch;
+package ui;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import static stopwatch.LoginScreen.*;
+import static ui.LoginScreen.*;
 
 public class RegisterScreen extends JFrame {
 

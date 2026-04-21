@@ -1,9 +1,5 @@
-package stopwatch;
-import stopwatch.LoginScreen;
-import stopwatch.RegisterScreen;
-import stopwatch.DashboardScreen;
-import stopwatch.DashboardScreen.PostData;
-import stopwatch.PostViewScreen;
+package ui;
+import ui.DashboardScreen.PostData;
 
 import javax.swing.*;
 
