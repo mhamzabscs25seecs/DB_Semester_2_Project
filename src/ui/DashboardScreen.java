@@ -1,4 +1,4 @@
-package ui;
+package stopwatch;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -6,15 +6,13 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.List;
 import java.util.ArrayList;
-import static ui.LoginScreen.*;
+import static stopwatch.LoginScreen.*;
 
 public class DashboardScreen extends JFrame {
 
     private String loggedInUser;
     private JPanel feedPanel;
     private JPanel sidebarList;
-
-    // Callback when user clicks a post
     private java.util.function.Consumer<PostData> onOpenPost;
 
     public DashboardScreen(String username, java.util.function.Consumer<PostData> onOpenPost) {
@@ -29,11 +27,12 @@ public class DashboardScreen extends JFrame {
         setSize(1100, 680);
         setMinimumSize(new Dimension(800, 500));
         setLocationRelativeTo(null);
+        setResizable(true);
 
         JPanel root = new JPanel(new BorderLayout());
         root.setBackground(BG_DEEP);
         root.add(buildTopBar(), BorderLayout.NORTH);
-        root.add(buildBody(), BorderLayout.CENTER);
+        root.add(buildBody(),   BorderLayout.CENTER);
 
         setContentPane(root);
         setVisible(true);
@@ -43,9 +42,9 @@ public class DashboardScreen extends JFrame {
 
     private JPanel buildTopBar() {
         JPanel bar = new JPanel(new BorderLayout(12, 0));
-        bar.setBackground(new Color(6, 15, 6));
+        bar.setBackground(new Color(6, 8, 18));
         bar.setBorder(new CompoundBorder(
-            new MatteBorder(0, 0, 1, 0, BORDER_COL),
+            new MatteBorder(0, 0, 1, 0, new Color(NEON_PINK.getRed(), NEON_PINK.getGreen(), NEON_PINK.getBlue(), 80)),
             new EmptyBorder(0, 16, 0, 16)
         ));
         bar.setPreferredSize(new Dimension(0, 48));
@@ -53,7 +52,7 @@ public class DashboardScreen extends JFrame {
         // Logo
         JLabel logo = new JLabel("CLIXKY");
         logo.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        logo.setForeground(GREEN_HI);
+        logo.setForeground(NEON_PINK);
         logo.setBorder(new EmptyBorder(0, 0, 0, 12));
 
         // Search bar
@@ -73,7 +72,7 @@ public class DashboardScreen extends JFrame {
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
         actions.setOpaque(false);
 
-        JButton newPostBtn = makeSmallButton("+ New Post", BG_CARD, GREEN_HI, new Color(42, 90, 42));
+        JButton newPostBtn = makeSmallButton("+ New Post", BG_CARD, NEON_CYAN, BORDER_COL);
         newPostBtn.addActionListener(e -> showCreatePostDialog());
 
         JButton browseBtn = makeSmallButton("Browse", BG_PANEL, TEXT_MUTED, BORDER_COL);
@@ -85,27 +84,28 @@ public class DashboardScreen extends JFrame {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(BG_CARD);
                 g2.fillOval(0, 0, getWidth(), getHeight());
-                g2.setColor(new Color(42, 90, 42));
-                g2.drawOval(0, 0, getWidth()-1, getHeight()-1);
+                g2.setColor(NEON_PINK);
+                g2.setStroke(new BasicStroke(1.5f));
+                g2.drawOval(1, 1, getWidth()-2, getHeight()-2);
                 super.paintComponent(g);
             }
         };
         avatar.setPreferredSize(new Dimension(30, 30));
         avatar.setHorizontalAlignment(SwingConstants.CENTER);
         avatar.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        avatar.setForeground(GREEN_HI);
+        avatar.setForeground(NEON_CYAN);
 
         actions.add(newPostBtn);
         actions.add(browseBtn);
         actions.add(avatar);
 
-        bar.add(logo, BorderLayout.WEST);
+        bar.add(logo,       BorderLayout.WEST);
         bar.add(searchWrap, BorderLayout.CENTER);
-        bar.add(actions, BorderLayout.EAST);
+        bar.add(actions,    BorderLayout.EAST);
         return bar;
     }
 
-    // ── BODY (SIDEBAR + FEED) ─────────────────────────────────────────────────
+    // ── BODY ─────────────────────────────────────────────────────────────────
 
     private JPanel buildBody() {
         JPanel body = new JPanel(new BorderLayout());
@@ -120,9 +120,9 @@ public class DashboardScreen extends JFrame {
     private JPanel buildSidebar() {
         JPanel sidebar = new JPanel();
         sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
-        sidebar.setBackground(new Color(6, 15, 6));
+        sidebar.setBackground(new Color(6, 8, 18));
         sidebar.setBorder(new CompoundBorder(
-            new MatteBorder(0, 0, 0, 1, BORDER_COL),
+            new MatteBorder(0, 0, 0, 1, new Color(NEON_PINK.getRed(), NEON_PINK.getGreen(), NEON_PINK.getBlue(), 50)),
             new EmptyBorder(16, 0, 16, 0)
         ));
         sidebar.setPreferredSize(new Dimension(185, 0));
@@ -140,7 +140,7 @@ public class DashboardScreen extends JFrame {
 
         sidebar.add(Box.createVerticalStrut(16));
         sidebar.add(sidebarSection("TRENDING"));
-        sidebar.add(makeSidebarItem("r/AskCS",   false, GOLD));
+        sidebar.add(makeSidebarItem("r/AskCS",    false, GOLD));
         sidebar.add(makeSidebarItem("r/Projects", false, GOLD));
 
         sidebar.add(Box.createVerticalGlue());
@@ -150,34 +150,33 @@ public class DashboardScreen extends JFrame {
     private JLabel sidebarSection(String text) {
         JLabel l = new JLabel(text);
         l.setFont(new Font("Segoe UI", Font.BOLD, 9));
-        l.setForeground(GREEN_DIM);
+        l.setForeground(NEON_DIM);
         l.setBorder(new EmptyBorder(0, 14, 6, 14));
         l.setAlignmentX(Component.LEFT_ALIGNMENT);
         return l;
     }
 
     private JPanel makeSidebarItem(String name, boolean active) {
-        return makeSidebarItem(name, active, GREEN_HI);
+        return makeSidebarItem(name, active, NEON_CYAN);
     }
 
     private JPanel makeSidebarItem(String name, boolean active, Color dotColor) {
         JPanel item = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
         item.setOpaque(true);
-        item.setBackground(active ? BG_CARD : new Color(6, 15, 6));
+        item.setBackground(active ? BG_CARD : new Color(6, 8, 18));
         item.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         if (active) {
-            item.setBorder(new MatteBorder(0, 3, 0, 0, GREEN_MID));
+            item.setBorder(new MatteBorder(0, 3, 0, 0, NEON_PINK));
         } else {
             item.setBorder(new EmptyBorder(0, 3, 0, 0));
         }
         item.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        // Dot indicator
         JLabel dot = new JLabel() {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g;
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(active ? dotColor : GREEN_DIM);
+                g2.setColor(active ? dotColor : NEON_DIM);
                 g2.fillOval(0, 3, 7, 7);
             }
         };
@@ -185,23 +184,20 @@ public class DashboardScreen extends JFrame {
 
         JLabel label = new JLabel(name);
         label.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        label.setForeground(active ? GREEN_HI : TEXT_MUTED);
+        label.setForeground(active ? NEON_CYAN : TEXT_MUTED);
 
         item.add(dot);
         item.add(label);
 
-        // Hover
         item.addMouseListener(new MouseAdapter() {
             public void mouseEntered(MouseEvent e) {
-                if (!active) item.setBackground(BG_PANEL);
+                if (!active) { item.setBackground(BG_PANEL); label.setForeground(NEON_CYAN); }
             }
             public void mouseExited(MouseEvent e) {
-                if (!active) item.setBackground(new Color(6, 15, 6));
-            }
-            public void mouseClicked(MouseEvent e) {
-                filterFeedBy(name);
+                if (!active) { item.setBackground(new Color(6, 8, 18)); label.setForeground(TEXT_MUTED); }
             }
         });
+
         return item;
     }
 
@@ -211,44 +207,41 @@ public class DashboardScreen extends JFrame {
         feedPanel = new JPanel();
         feedPanel.setLayout(new BoxLayout(feedPanel, BoxLayout.Y_AXIS));
         feedPanel.setBackground(BG_DEEP);
-        feedPanel.setBorder(new EmptyBorder(16, 16, 16, 16));
+        feedPanel.setBorder(new EmptyBorder(12, 12, 12, 12));
 
-        loadPosts(getSamplePosts());
+        // Feed header
+        JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        header.setOpaque(false);
+        header.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        JLabel feedTitle = new JLabel("Home Feed");
+        feedTitle.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        feedTitle.setForeground(TEXT_MAIN);
+        header.add(feedTitle);
+        feedPanel.add(header);
+        feedPanel.add(Box.createVerticalStrut(8));
+
+        for (PostData post : getSamplePosts()) {
+            feedPanel.add(buildPostCard(post));
+            feedPanel.add(Box.createVerticalStrut(8));
+        }
 
         JScrollPane scroll = new JScrollPane(feedPanel);
+        scroll.setBorder(null);
         scroll.setBackground(BG_DEEP);
         scroll.getViewport().setBackground(BG_DEEP);
-        scroll.setBorder(null);
         scroll.getVerticalScrollBar().setUnitIncrement(16);
         styleScrollBar(scroll);
         return scroll;
     }
 
-    private void loadPosts(List<PostData> posts) {
-        feedPanel.removeAll();
-        for (PostData p : posts) {
-            feedPanel.add(makePostCard(p));
-            feedPanel.add(Box.createVerticalStrut(8));
-        }
-        feedPanel.revalidate();
-        feedPanel.repaint();
-    }
-
-    private void filterFeedBy(String subreddit) {
-        List<PostData> all = getSamplePosts();
-        List<PostData> filtered = new ArrayList<>();
-        for (PostData p : all) {
-            if (p.subreddit.equals(subreddit)) filtered.add(p);
-        }
-        loadPosts(filtered.isEmpty() ? all : filtered);
-    }
-
-    private JPanel makePostCard(PostData post) {
-        JPanel card = new RoundPanel(8, BG_PANEL, BORDER_COL);
-        card.setLayout(new BorderLayout(12, 0));
-        card.setBorder(new EmptyBorder(12, 12, 12, 14));
-        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 90));
-        card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+    private JPanel buildPostCard(PostData post) {
+        JPanel card = new JPanel(new BorderLayout(10, 0));
+        card.setBackground(BG_PANEL);
+        card.setBorder(new CompoundBorder(
+            BorderFactory.createLineBorder(BORDER_COL, 1),
+            new EmptyBorder(12, 14, 12, 14)
+        ));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 80));
 
         // Vote column
         JPanel voteCol = new JPanel();
@@ -259,20 +252,20 @@ public class DashboardScreen extends JFrame {
         JButton upBtn   = makeVoteBtn("▲", true);
         JLabel  score   = new JLabel(String.valueOf(post.score));
         score.setFont(new Font("Segoe UI", Font.BOLD, 11));
-        score.setForeground(post.score > 100 ? GREEN_HI : TEXT_MUTED);
+        score.setForeground(post.score > 100 ? NEON_CYAN : TEXT_MUTED);
         score.setAlignmentX(Component.CENTER_ALIGNMENT);
         JButton downBtn = makeVoteBtn("▼", false);
 
         upBtn.addActionListener(e -> {
             post.score++;
             score.setText(String.valueOf(post.score));
-            score.setForeground(GREEN_HI);
-            upBtn.setForeground(GREEN_HI);
+            score.setForeground(NEON_CYAN);
+            upBtn.setForeground(NEON_CYAN);
         });
         downBtn.addActionListener(e -> {
             post.score--;
             score.setText(String.valueOf(post.score));
-            downBtn.setForeground(new Color(200, 100, 60));
+            downBtn.setForeground(NEON_PINK);
         });
 
         voteCol.add(Box.createVerticalGlue());
@@ -290,12 +283,12 @@ public class DashboardScreen extends JFrame {
 
         JLabel titleLabel = new JLabel("<html><body style='width:500px'>" + post.title + "</body></html>");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        titleLabel.setForeground(new Color(158, 222, 158));
+        titleLabel.setForeground(TEXT_MAIN);
         titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JLabel meta = new JLabel("by  " + post.author + "  ·  " + post.subreddit + "  ·  " + post.time + "  ·  " + post.comments + " comments");
         meta.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        meta.setForeground(GREEN_DIM);
+        meta.setForeground(NEON_DIM);
         meta.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         content.add(Box.createVerticalGlue());
@@ -307,13 +300,22 @@ public class DashboardScreen extends JFrame {
         card.add(voteCol,  BorderLayout.WEST);
         card.add(content,  BorderLayout.CENTER);
 
-        // Click to open post
         card.addMouseListener(new MouseAdapter() {
-            public void mouseClicked(MouseEvent e) {
-                if (onOpenPost != null) onOpenPost.accept(post);
+            public void mouseClicked(MouseEvent e) { if (onOpenPost != null) onOpenPost.accept(post); }
+            public void mouseEntered(MouseEvent e) {
+                card.setBackground(BG_CARD);
+                card.setBorder(new CompoundBorder(
+                    BorderFactory.createLineBorder(new Color(NEON_PINK.getRed(), NEON_PINK.getGreen(), NEON_PINK.getBlue(), 120), 1),
+                    new EmptyBorder(12, 14, 12, 14)
+                ));
             }
-            public void mouseEntered(MouseEvent e) { card.setBackground(BG_CARD); }
-            public void mouseExited(MouseEvent e)  { card.setBackground(BG_PANEL); }
+            public void mouseExited(MouseEvent e) {
+                card.setBackground(BG_PANEL);
+                card.setBorder(new CompoundBorder(
+                    BorderFactory.createLineBorder(BORDER_COL, 1),
+                    new EmptyBorder(12, 14, 12, 14)
+                ));
+            }
         });
 
         return card;
@@ -322,7 +324,7 @@ public class DashboardScreen extends JFrame {
     private JButton makeVoteBtn(String text, boolean isUp) {
         JButton b = new JButton(text);
         b.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        b.setForeground(isUp ? GREEN_MID : TEXT_MUTED);
+        b.setForeground(isUp ? NEON_MID : TEXT_MUTED);
         b.setContentAreaFilled(false);
         b.setBorderPainted(false);
         b.setFocusPainted(false);
@@ -331,12 +333,8 @@ public class DashboardScreen extends JFrame {
         b.setPreferredSize(new Dimension(24, 20));
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         b.addMouseListener(new MouseAdapter() {
-            public void mouseEntered(MouseEvent e) {
-                b.setForeground(isUp ? GREEN_HI : new Color(220, 120, 60));
-            }
-            public void mouseExited(MouseEvent e) {
-                b.setForeground(isUp ? GREEN_MID : TEXT_MUTED);
-            }
+            public void mouseEntered(MouseEvent e) { b.setForeground(isUp ? NEON_CYAN : NEON_PINK); }
+            public void mouseExited(MouseEvent e)  { b.setForeground(isUp ? NEON_MID : TEXT_MUTED); }
         });
         return b;
     }
@@ -353,14 +351,14 @@ public class DashboardScreen extends JFrame {
 
         JLabel heading = new JLabel("Create a Post");
         heading.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        heading.setForeground(GREEN_HI);
+        heading.setForeground(NEON_PINK);
         heading.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JTextField titleField = makeTextField("Post title");
         JTextArea  bodyArea   = new JTextArea(5, 20);
         bodyArea.setBackground(BG_DEEP);
         bodyArea.setForeground(TEXT_MAIN);
-        bodyArea.setCaretColor(GREEN_HI);
+        bodyArea.setCaretColor(NEON_CYAN);
         bodyArea.setFont(FONT_INPUT);
         bodyArea.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(BORDER_COL),
@@ -373,11 +371,8 @@ public class DashboardScreen extends JFrame {
         bodyScroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120));
         bodyScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JButton submit = makeButton("SUBMIT POST", BG_CARD, GREEN_HI, new Color(42, 90, 42));
-        submit.addActionListener(e -> {
-            // TODO: PostDAO.createPost(...)
-            dlg.dispose();
-        });
+        JButton submit = makeButton("SUBMIT POST", BG_CARD, NEON_CYAN, BORDER_COL);
+        submit.addActionListener(e -> dlg.dispose());
 
         p.add(heading);
         p.add(Box.createVerticalStrut(18));
@@ -395,14 +390,12 @@ public class DashboardScreen extends JFrame {
         dlg.setVisible(true);
     }
 
-    // ── Scroll bar style ──────────────────────────────────────────────────────
-
     private void styleScrollBar(JScrollPane sp) {
         JScrollBar vsb = sp.getVerticalScrollBar();
         vsb.setBackground(BG_DEEP);
         vsb.setUI(new javax.swing.plaf.basic.BasicScrollBarUI() {
             @Override protected void configureScrollBarColors() {
-                this.thumbColor  = BG_CARD;
+                this.thumbColor  = new Color(NEON_PINK.getRed(), NEON_PINK.getGreen(), NEON_PINK.getBlue(), 80);
                 this.trackColor  = BG_DEEP;
             }
             @Override protected JButton createDecreaseButton(int o) { return zeroBtn(); }
@@ -421,7 +414,7 @@ public class DashboardScreen extends JFrame {
         return b;
     }
 
-    // ── Sample data (replace with DB calls) ───────────────────────────────────
+    // ── Sample data ───────────────────────────────────────────────────────────
 
     public static List<PostData> getSamplePosts() {
         List<PostData> list = new ArrayList<>();
@@ -434,7 +427,7 @@ public class DashboardScreen extends JFrame {
         return list;
     }
 
-    // ── PostData DTO ─────────────────────────────────────────────────────────
+    // ── PostData DTO ──────────────────────────────────────────────────────────
 
     public static class PostData {
         public int    id, score, comments;
