@@ -1,6 +1,7 @@
 package ui;
-import ui.DashboardScreen.PostData;
 
+import ui.DashboardScreen.PostData;
+import dao.Session;
 import javax.swing.*;
 
 public class Main {
@@ -17,7 +18,7 @@ public class Main {
         loginScreen = new LoginScreen(
             () -> {
                 // On successful login → go to Dashboard
-                String user = "hamza_dev"; // TODO: get from Session after UserDAO.login()
+                String user = Session.getCurrentUsername();
                 loginScreen.dispose();
                 showDashboard(user);
             },
@@ -36,7 +37,7 @@ public class Main {
         registerScreen = new RegisterScreen(
             () -> {
                 // Registration success → go to Dashboard
-                String user = "hamza_dev"; // TODO: get from Session after UserDAO.register()
+                String user = Session.getCurrentUsername();
                 registerScreen.dispose();
                 showDashboard(user);
             },
