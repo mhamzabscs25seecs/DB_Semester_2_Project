@@ -1,4 +1,6 @@
-CREATE DATABASE 
+-- Note that in SQLITE there is no CREATE DATABASE Statement.
+-- Moreover, in SQLITE (particularly in older versions of SQLITE) FKs are not enforced by default. So we have to do:
+PRAGMA foreign_keys = ON;
 
 CREATE TABLE Users (
 	/* This User table will contain the core account data. Social media apps like ours absolutely depend on at least one 
@@ -92,9 +94,9 @@ post_id INTEGER NOT NULL,
 commenter_id INTEGER NOT NULL,
 comment_body TEXT NOT NULL CHECK(LENGTH(comment_body) <= 2000),
 
-commented_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+commented_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-parent_comment_id INTEGER ,
+parent_comment_id INTEGER,
 
 
 FOREIGN KEY (commenter_id) REFERENCES Users (user_id) ON DELETE CASCADE,
@@ -103,3 +105,45 @@ FOREIGN KEY (post_id) REFERENCES Posts (post_id) ON DELETE CASCADE,
 FOREIGN KEY (parent_comment_id) REFERENCES Comments(comment_id) ON DELETE CASCADE  
 
 );
+
+/* In our app, below every post there is an option for voting.
+	This vote can be an upvote or a downvote */
+-- We keep the (user_id, post_id) combination unique as we want one user to have 
+-- only one vote (either upvote or downvote and certainly not both) per post.
+CREATE TABLE Post_Votes (
+vote_id INTEGER PRIMARY KEY AUTOINCREMENT,
+post_id INTEGER NOT NULL,
+user_id INTEGER NOT NULL,
+
+vote_type INTEGER NOT NULL CHECK(vote_type IN(-1, 1)),
+
+FOREIGN KEY (post_id) REFERENCES Posts (post_id) 
+								ON DELETE CASCADE,		 
+FOREIGN KEY (user_id) REFERENCES Users (user_id) 
+								ON DELETE CASCADE,						
+					
+UNIQUE(user_id, post_id)	
+);
+
+
+-- Every post has comments which not only have their child comments, but also the comments have their own votes.
+
+CREATE TABLE Comment_Votes (
+comment_vote_id INTEGER PRIMARY KEY AUTOINCREMENT,
+comment_id INTEGER NOT NULL,
+comment_voter_id INTEGER NOT NULL,
+
+comment_vote_type INTEGER NOT NULL CHECK (comment_vote_type IN(-1, 1)),
+
+FOREIGN KEY (comment_id) REFERENCES Comments (comment_id) 
+											ON DELETE CASCADE,
+											
+FOREIGN KEY (comment_voter_id) REFERENCES Users (user_id) 
+											ON DELETE CASCADE,
+											
+UNIQUE (comment_voter_id, comment_id)
+);
+
+
+
+
