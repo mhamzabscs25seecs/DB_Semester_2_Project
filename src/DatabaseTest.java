@@ -4,8 +4,8 @@ import java.sql.SQLException;
 
 public class DatabaseTest {
     public static void main(String[] args) {
-        // This will create 'clixky.db' in your project root if it doesn't exist yet
-        String url = "jdbc:sqlite:clixky.db";
+        // Connect to the existing Clixky database inside the SQL files folder.
+        String url = "jdbc:sqlite:SQL files/Clixky.db";
 
         try (Connection conn = DriverManager.getConnection(url)) {
             if (conn != null) {

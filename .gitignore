@@ -27,3 +27,4 @@ out/
 src/out/
 *.iml
 *.db-journal
+*.db

@@ -95,7 +95,7 @@ commenter_id INTEGER NOT NULL,
 comment_body TEXT NOT NULL CHECK(LENGTH(comment_body) <= 2000),
 
 commented_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+updated_at DATETIME,
 parent_comment_id INTEGER,
 
 
@@ -143,7 +143,6 @@ FOREIGN KEY (comment_voter_id) REFERENCES Users (user_id)
 											
 UNIQUE (comment_voter_id, comment_id)
 );
-
 
 
 
