@@ -1,5 +1,7 @@
 package ui;
 
+import dao.CommentDAO;
+
 import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
@@ -15,6 +17,7 @@ public class PostViewScreen extends JFrame {
     private String     currentUser;
     private Runnable   onBack;
     private JLabel     scoreLabel;
+    private JScrollPane commentsScroll;
 
     public PostViewScreen(PostData post, String currentUser, Runnable onBack) {
         this.post        = post;
@@ -95,9 +98,9 @@ public class PostViewScreen extends JFrame {
         main.add(buildPostCard(),      BorderLayout.NORTH);
         main.add(buildReplyComposer(), BorderLayout.CENTER);
 
-        /// FIXED: Bypass CommentPanel entirely and create an empty scroll pane
-        JScrollPane commentsScroll = new JScrollPane();
-        commentsScroll.getViewport().setBackground(BG_DEEP);
+        commentsScroll = CommentPanel.buildTree(loadComments(), currentUser, () ->
+                JOptionPane.showMessageDialog(this, "Reply saved in UI only for now.", "Clixky", JOptionPane.INFORMATION_MESSAGE)
+        );
         commentsScroll.setBorder(new MatteBorder(1, 0, 0, 0,
             new Color(NEON_PINK.getRed(), NEON_PINK.getGreen(), NEON_PINK.getBlue(), 60)));
         commentsScroll.setPreferredSize(new Dimension(0, 380));
@@ -112,6 +115,24 @@ public class PostViewScreen extends JFrame {
         outerScroll.setBackground(BG_DEEP);
         outerScroll.getViewport().setBackground(BG_DEEP);
         return outerScroll;
+    }
+
+    private List<CommentPanel.CommentData> loadComments() {
+        List<CommentPanel.CommentData> comments = new ArrayList<>();
+        CommentDAO commentDAO = new CommentDAO();
+
+        for (CommentDAO.CommentRecord comment : commentDAO.getCommentsForPost(post.id)) {
+            comments.add(new CommentPanel.CommentData(
+                    comment.getCommentId(),
+                    comment.getParentCommentId(),
+                    "u/" + comment.getAuthor(),
+                    escapeHtml(comment.getBody()),
+                    comment.getCommentedAt(),
+                    comment.getScore()
+            ));
+        }
+
+        return comments;
     }
 
     private JPanel buildPostCard() {
@@ -170,7 +191,7 @@ public class PostViewScreen extends JFrame {
         // Action bar
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         actions.setOpaque(false);
-        actions.add(makeChip("💬  " + post.comments + " Comments"));
+        actions.add(makeChip("💬  " + post.comments + " Comments", this::toggleComments));
         actions.add(makeChip("↗  Share"));
         actions.add(makeChip("🔖  Save"));
 
@@ -356,6 +377,10 @@ public class PostViewScreen extends JFrame {
     }
 
     private JLabel makeChip(String text) {
+        return makeChip(text, null);
+    }
+
+    private JLabel makeChip(String text, Runnable onClick) {
         JLabel l = new JLabel(text);
         l.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         l.setForeground(TEXT_MUTED);
@@ -365,10 +390,25 @@ public class PostViewScreen extends JFrame {
         ));
         l.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         l.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                if (onClick != null) {
+                    onClick.run();
+                }
+            }
             public void mouseEntered(MouseEvent e) { l.setForeground(NEON_CYAN); }
             public void mouseExited(MouseEvent e)  { l.setForeground(TEXT_MUTED); }
         });
         return l;
+    }
+
+    private void toggleComments() {
+        if (commentsScroll == null) {
+            return;
+        }
+
+        commentsScroll.setVisible(!commentsScroll.isVisible());
+        commentsScroll.getParent().revalidate();
+        commentsScroll.getParent().repaint();
     }
 
     private JButton makeBigVoteBtn(String text, boolean isUp) {
@@ -385,6 +425,20 @@ public class PostViewScreen extends JFrame {
             public void mouseExited(MouseEvent e)  { b.setForeground(isUp ? NEON_MID : TEXT_MUTED); }
         });
         return b;
+    }
+
+    private String escapeHtml(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+
+        return text
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;")
+                .replace("\n", "<br>");
     }
 
     public static void main(String[] args) {

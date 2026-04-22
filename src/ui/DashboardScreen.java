@@ -1,6 +1,8 @@
 package ui;
 
 import dao.PostDAO;
+import dao.Session;
+import dao.UserDAO;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -96,6 +98,12 @@ public class DashboardScreen extends JFrame {
         avatar.setHorizontalAlignment(SwingConstants.CENTER);
         avatar.setFont(new Font("Segoe UI", Font.BOLD, 12));
         avatar.setForeground(NEON_CYAN);
+        avatar.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        avatar.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) { showProfileDialog(); }
+            public void mouseEntered(MouseEvent e) { avatar.setForeground(NEON_PINK); }
+            public void mouseExited(MouseEvent e)  { avatar.setForeground(NEON_CYAN); }
+        });
 
         actions.add(newPostBtn);
         actions.add(browseBtn);
@@ -105,6 +113,109 @@ public class DashboardScreen extends JFrame {
         bar.add(searchWrap, BorderLayout.CENTER);
         bar.add(actions,    BorderLayout.EAST);
         return bar;
+    }
+
+    private void showProfileDialog() {
+        if (!Session.isLoggedIn()) {
+            JOptionPane.showMessageDialog(this, "No user session found.", "Clixky", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        UserDAO.UserProfile profile = new UserDAO().getProfileById(Session.getCurrentUserId());
+        if (profile == null) {
+            JOptionPane.showMessageDialog(this, "Profile data could not be loaded.", "Clixky", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        JDialog dialog = new JDialog(this, "Clixky Profile", true);
+        dialog.setSize(390, 430);
+        dialog.setLocationRelativeTo(this);
+        dialog.setResizable(false);
+        dialog.setUndecorated(true);
+
+        JPanel card = new RoundPanel(14, BG_PANEL, BORDER_COL);
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBorder(new EmptyBorder(24, 28, 24, 28));
+
+        JLabel avatar = new JLabel(profile.getUsername().substring(0, 1).toUpperCase()) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(BG_CARD);
+                g2.fillOval(0, 0, getWidth(), getHeight());
+                g2.setColor(NEON_PINK);
+                g2.setStroke(new BasicStroke(2f));
+                g2.drawOval(1, 1, getWidth() - 2, getHeight() - 2);
+                super.paintComponent(g);
+            }
+        };
+        avatar.setPreferredSize(new Dimension(54, 54));
+        avatar.setMaximumSize(new Dimension(54, 54));
+        avatar.setHorizontalAlignment(SwingConstants.CENTER);
+        avatar.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        avatar.setForeground(NEON_CYAN);
+        avatar.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel name = new JLabel(nullToFallback(profile.getDisplayName(), profile.getUsername()));
+        name.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        name.setForeground(NEON_PINK);
+        name.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel username = new JLabel("@" + profile.getUsername());
+        username.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        username.setForeground(NEON_MID);
+        username.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JSeparator sep = new JSeparator();
+        sep.setForeground(BORDER_COL);
+        sep.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
+
+        card.add(avatar);
+        card.add(Box.createVerticalStrut(10));
+        card.add(name);
+        card.add(Box.createVerticalStrut(4));
+        card.add(username);
+        card.add(Box.createVerticalStrut(18));
+        card.add(sep);
+        card.add(Box.createVerticalStrut(16));
+        card.add(profileRow("EMAIL", profile.getEmail()));
+        card.add(profileRow("BIO", nullToFallback(profile.getBioText(), "No bio yet.")));
+        card.add(profileRow("COUNTRY", nullToFallback(profile.getCountry(), "Not set")));
+        card.add(profileRow("PHONE", nullToFallback(profile.getPhoneNo(), "Not set")));
+        card.add(profileRow("BIRTH YEAR", String.valueOf(profile.getBirthYear())));
+        card.add(profileRow("PRIVACY", profile.isPrivate() ? "Private" : "Public"));
+        card.add(Box.createVerticalStrut(18));
+
+        JButton close = makeButton("CLOSE", BG_CARD, NEON_CYAN, BORDER_COL);
+        close.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        close.addActionListener(e -> dialog.dispose());
+        card.add(close);
+
+        dialog.setContentPane(card);
+        dialog.setVisible(true);
+    }
+
+    private JPanel profileRow(String label, String value) {
+        JPanel row = new JPanel(new BorderLayout(12, 0));
+        row.setOpaque(false);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+
+        JLabel key = new JLabel(label);
+        key.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        key.setForeground(NEON_MID);
+
+        JLabel val = new JLabel(value);
+        val.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        val.setForeground(TEXT_MAIN);
+        val.setHorizontalAlignment(SwingConstants.RIGHT);
+
+        row.add(key, BorderLayout.WEST);
+        row.add(val, BorderLayout.CENTER);
+        return row;
+    }
+
+    private String nullToFallback(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     // ── BODY ─────────────────────────────────────────────────────────────────

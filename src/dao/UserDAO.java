@@ -65,6 +65,42 @@ public class UserDAO {
 
     }
 
+    public static class UserProfile {
+        private final int userId;
+        private final String username;
+        private final String email;
+        private final String displayName;
+        private final String bioText;
+        private final String country;
+        private final String phoneNo;
+        private final int birthYear;
+        private final boolean isPrivate;
+
+        public UserProfile(int userId, String username, String email, String displayName,
+                           String bioText, String country, String phoneNo,
+                           int birthYear, boolean isPrivate) {
+            this.userId = userId;
+            this.username = username;
+            this.email = email;
+            this.displayName = displayName;
+            this.bioText = bioText;
+            this.country = country;
+            this.phoneNo = phoneNo;
+            this.birthYear = birthYear;
+            this.isPrivate = isPrivate;
+        }
+
+        public int getUserId() { return userId; }
+        public String getUsername() { return username; }
+        public String getEmail() { return email; }
+        public String getDisplayName() { return displayName; }
+        public String getBioText() { return bioText; }
+        public String getCountry() { return country; }
+        public String getPhoneNo() { return phoneNo; }
+        public int getBirthYear() { return birthYear; }
+        public boolean isPrivate() { return isPrivate; }
+    }
+
 
     public LoggedInUser login(String username, String password) {
         String sql = """
@@ -192,5 +228,50 @@ public class UserDAO {
         } catch (SQLException e) {
             return new RegisterResult(false, "Database error: " + e.getMessage(), null);
         }
+    }
+
+    public UserProfile getProfileById(int userId) {
+        String sql = """
+                SELECT
+                    u.user_id,
+                    u.username,
+                    u.email,
+                    up.display_name,
+                    up.bio_text,
+                    up.country,
+                    up.phone_no,
+                    up.birth_year,
+                    up.is_private
+                FROM Users u
+                LEFT JOIN User_Profiles up ON u.user_id = up.user_id
+                WHERE u.user_id = ?
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, userId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return new UserProfile(
+                            rs.getInt("user_id"),
+                            rs.getString("username"),
+                            rs.getString("email"),
+                            rs.getString("display_name"),
+                            rs.getString("bio_text"),
+                            rs.getString("country"),
+                            rs.getString("phone_no"),
+                            rs.getInt("birth_year"),
+                            rs.getInt("is_private") == 1
+                    );
+                }
+            }
+
+        } catch (SQLException e) {
+            System.out.println("Profile database error: " + e.getMessage());
+        }
+
+        return null;
     }
 }
