@@ -1,5 +1,7 @@
 package ui;
 
+import dao.PostDAO;
+
 import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
@@ -220,7 +222,16 @@ public class DashboardScreen extends JFrame {
         feedPanel.add(header);
         feedPanel.add(Box.createVerticalStrut(8));
 
-        for (PostData post : getSamplePosts()) {
+        List<PostData> posts = loadFeedPosts();
+        if (posts.isEmpty()) {
+            JLabel empty = new JLabel("No posts found.");
+            empty.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+            empty.setForeground(TEXT_MUTED);
+            empty.setBorder(new EmptyBorder(24, 12, 24, 12));
+            feedPanel.add(empty);
+        }
+
+        for (PostData post : posts) {
             feedPanel.add(buildPostCard(post));
             feedPanel.add(Box.createVerticalStrut(8));
         }
@@ -414,16 +425,24 @@ public class DashboardScreen extends JFrame {
         return b;
     }
 
-    // ── Sample data ───────────────────────────────────────────────────────────
+    // ── Database feed ─────────────────────────────────────────────────────────
 
-    public static List<PostData> getSamplePosts() {
+    private List<PostData> loadFeedPosts() {
         List<PostData> list = new ArrayList<>();
-        list.add(new PostData(1, "Best practices for JDBC connection pooling in Java?", "u/ali_codes", "r/JavaProgramming", "4h ago", 847, 23));
-        list.add(new PostData(2, "3NF vs BCNF — When does it actually matter in production?", "u/hamza_dev", "r/DatabaseDesign", "6h ago", 412, 47));
-        list.add(new PostData(3, "CS-220 semester project ideas — share yours!", "u/aayan_a", "r/NUCES_FAST", "1d ago", 189, 91));
-        list.add(new PostData(4, "SQLite vs PostgreSQL for learning relational DB concepts", "u/db_learner", "r/DatabaseDesign", "2d ago", 56, 18));
-        list.add(new PostData(5, "How I built a full-stack Java app in 7 days", "u/hamza_dev", "r/JavaProgramming", "3d ago", 203, 34));
-        list.add(new PostData(6, "Open source Java GUI libraries comparison 2025", "u/code_wizard", "r/OpenSource", "4d ago", 98, 12));
+        PostDAO postDAO = new PostDAO();
+
+        for (PostDAO.FeedPost post : postDAO.getFeedPosts()) {
+            list.add(new PostData(
+                    post.getPostId(),
+                    post.getTitle(),
+                    "u/" + post.getAuthor(),
+                    "r/" + post.getCommunity(),
+                    post.getCreatedAt(),
+                    post.getScore(),
+                    post.getCommentCount()
+            ));
+        }
+
         return list;
     }
 
