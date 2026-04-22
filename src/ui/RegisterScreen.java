@@ -1,5 +1,8 @@
 package ui;
 
+import dao.Session;
+import dao.UserDAO;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -235,8 +238,20 @@ public class RegisterScreen extends JFrame {
             JOptionPane.showMessageDialog(this, "Please enter a valid email.", "Clixky", JOptionPane.ERROR_MESSAGE);
             return;
         }
-        // TODO: UserDAO.register(first + " " + last, username, email, pass)
-        if (onRegisterSuccess != null) onRegisterSuccess.run();
+
+        UserDAO userDAO = new UserDAO();
+        UserDAO.RegisterResult result = userDAO.register(first, last, username, email, pass);
+
+        if (!result.isSuccess()) {
+            JOptionPane.showMessageDialog(this, result.getMessage(), "Clixky", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        Session.login(result.getUser());
+
+        if (onRegisterSuccess != null) {
+            onRegisterSuccess.run();
+        }
     }
 
     private String getText(JTextField f) {

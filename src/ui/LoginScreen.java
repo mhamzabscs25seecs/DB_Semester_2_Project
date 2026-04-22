@@ -1,5 +1,6 @@
 package ui;
 
+import dao.Session;
 import dao.UserDAO;      // The Data access object we created for this
 import javax.swing.*;
 import java.awt.*;
@@ -40,10 +41,10 @@ public class LoginScreen extends JFrame {
     private void buildUI() {
         setTitle("Clixky — Sign In");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setSize(500, 620);
+        setSize(740, 600);
         setLocationRelativeTo(null);
         setResizable(true);
-        setMinimumSize(new Dimension(400, 540));
+        setMinimumSize(new Dimension(460, 410));
 
         JPanel root = new JPanel(new GridBagLayout()) {
             @Override
@@ -71,8 +72,16 @@ public class LoginScreen extends JFrame {
             }
         };
         root.setOpaque(false);
-        root.add(buildCard());
+        JPanel card = buildCard();
+        root.add(card);
+        root.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                resizeLoginCard(card, root);
+            }
+        });
         setContentPane(root);
+        resizeLoginCard(card, root);
         setVisible(true);
     }
 
@@ -80,7 +89,7 @@ public class LoginScreen extends JFrame {
         JPanel card = new RoundPanel(16, BG_PANEL, BORDER_COL);
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setPreferredSize(new Dimension(360, 480));
-        card.setBorder(BorderFactory.createEmptyBorder(36, 36, 36, 36));
+        card.setBorder(BorderFactory.createEmptyBorder(34, 34, 34, 34));
 
         // Logo
         JLabel logo = new JLabel("CLIXKY");
@@ -137,23 +146,37 @@ public class LoginScreen extends JFrame {
         card.add(logo);
         card.add(Box.createVerticalStrut(4));
         card.add(tag);
-        card.add(Box.createVerticalStrut(20));
+        card.add(Box.createVerticalStrut(18));
         card.add(sep);
-        card.add(Box.createVerticalStrut(24));
+        card.add(Box.createVerticalStrut(22));
         card.add(uLabel);
         card.add(Box.createVerticalStrut(6));
         card.add(usernameField);
-        card.add(Box.createVerticalStrut(16));
+        card.add(Box.createVerticalStrut(14));
         card.add(pLabel);
         card.add(Box.createVerticalStrut(6));
         card.add(passwordField);
-        card.add(Box.createVerticalStrut(28));
+        card.add(Box.createVerticalStrut(24));
         card.add(signInBtn);
-        card.add(Box.createVerticalStrut(16));
+        card.add(Box.createVerticalStrut(14));
         card.add(linkRow);
 
         return card;
     }
+
+    private void resizeLoginCard(JPanel card, JComponent root) {
+        int cardWidth = clamp((int) (root.getWidth() * 0.48), 280, 500);
+        int cardHeight = clamp((int) (root.getHeight() * 0.80), 340, 580);
+        Dimension size = new Dimension(cardWidth, cardHeight);
+        card.setPreferredSize(size);
+        card.setMinimumSize(size);
+        card.revalidate();
+    }
+
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
     private void handleLogin() {
         String user = usernameField.getText().trim();
         String pass = new String(passwordField.getPassword()).trim();
@@ -172,6 +195,8 @@ public class LoginScreen extends JFrame {
             showCyberError("Access Denied", "Invalid username or password.");
             return;
         }
+
+        Session.login (loggedInUser);
 
         if (onLoginSuccess != null)
             onLoginSuccess.run();
@@ -202,9 +227,9 @@ public class LoginScreen extends JFrame {
         f.setCaretColor(NEON_CYAN);
         f.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(BORDER_COL, 1),
-            BorderFactory.createEmptyBorder(10, 14, 10, 14)
+            BorderFactory.createEmptyBorder(7, 12, 7, 12)
         ));
-        f.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        f.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
         f.setAlignmentX(Component.CENTER_ALIGNMENT); 
 
         // Placeholder logic
@@ -218,7 +243,7 @@ public class LoginScreen extends JFrame {
                 }
                 f.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createLineBorder(NEON_PINK, 1),
-                    BorderFactory.createEmptyBorder(10, 14, 10, 14)
+                    BorderFactory.createEmptyBorder(7, 12, 7, 12)
                 ));
             }
             public void focusLost(FocusEvent e) {
@@ -228,7 +253,7 @@ public class LoginScreen extends JFrame {
                 }
                 f.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createLineBorder(BORDER_COL, 1),
-                    BorderFactory.createEmptyBorder(10, 14, 10, 14)
+                    BorderFactory.createEmptyBorder(7, 12, 7, 12)
                 ));
             }
         });
@@ -239,14 +264,14 @@ public class LoginScreen extends JFrame {
                 if (!f.hasFocus())
                     f.setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createLineBorder(NEON_MID, 1),
-                        BorderFactory.createEmptyBorder(10, 14, 10, 14)
+                        BorderFactory.createEmptyBorder(7, 12, 7, 12)
                     ));
             }
             public void mouseExited(MouseEvent e) {
                 if (!f.hasFocus())
                     f.setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createLineBorder(BORDER_COL, 1),
-                        BorderFactory.createEmptyBorder(10, 14, 10, 14)
+                        BorderFactory.createEmptyBorder(7, 12, 7, 12)
                     ));
             }
         });
@@ -277,7 +302,7 @@ public class LoginScreen extends JFrame {
         b.setBorderPainted(false);
         b.setFocusPainted(false);
         b.setAlignmentX(Component.CENTER_ALIGNMENT);
-        b.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        b.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         b.addMouseListener(new MouseAdapter() {
             public void mouseEntered(MouseEvent e) { b.setForeground(NEON_PINK); }
