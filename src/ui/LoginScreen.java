@@ -9,23 +9,54 @@ import java.awt.geom.*;
 
 public class LoginScreen extends JFrame {
 
-    // ── Cyberpunk Palette ─────────────────────────────────────
-    static final Color BG_DEEP    = new Color(8,   10,  20);
-    static final Color BG_PANEL   = new Color(12,  16,  32);
-    static final Color BG_CARD    = new Color(18,  22,  45);
-    static final Color BORDER_COL = new Color(40,  45,  90);
-    static final Color NEON_PINK  = new Color(255,  60, 180);
-    static final Color NEON_CYAN  = new Color(0,   220, 255);
-    static final Color NEON_MID   = new Color(160,  60, 200);
-    static final Color NEON_DIM   = new Color(60,   40, 100);
-    static final Color GOLD       = new Color(255, 210,  80);
-    static final Color TEXT_MAIN  = new Color(200, 220, 255);
-    static final Color TEXT_MUTED = new Color(90,  100, 160);
-    static final Font  FONT_TITLE = new Font("Segoe UI", Font.BOLD,  28);
-    static final Font  FONT_LABEL = new Font("Segoe UI", Font.BOLD,  11);
-    static final Font  FONT_INPUT = new Font("Segoe UI", Font.PLAIN, 14);
-    static final Font  FONT_BTN   = new Font("Segoe UI", Font.BOLD,  13);
-    static final Font  FONT_SMALL = new Font("Segoe UI", Font.PLAIN, 12);
+    // ── Shared Palette / Fonts ────────────────────────────────
+    static boolean LIGHT_MODE = false;
+    static Color BG_DEEP    = new Color(8,   10,  20);
+    static Color BG_PANEL   = new Color(12,  16,  32);
+    static Color BG_CARD    = new Color(18,  22,  45);
+    static Color BORDER_COL = new Color(40,  45,  90);
+    static Color NEON_PINK  = new Color(255,  60, 180);
+    static Color NEON_CYAN  = new Color(0,   220, 255);
+    static Color NEON_MID   = new Color(160,  60, 200);
+    static Color NEON_DIM   = new Color(60,   40, 100);
+    static Color GOLD       = new Color(255, 210,  80);
+    static Color TEXT_MAIN  = new Color(200, 220, 255);
+    static Color TEXT_MUTED = new Color(90,  100, 160);
+    static Font  FONT_TITLE = new Font("Segoe UI", Font.BOLD,  32);
+    static Font  FONT_LABEL = new Font("Segoe UI", Font.BOLD,  12);
+    static Font  FONT_INPUT = new Font("Segoe UI", Font.PLAIN, 16);
+    static Font  FONT_BTN   = new Font("Segoe UI", Font.BOLD,  14);
+    static Font  FONT_SMALL = new Font("Segoe UI", Font.PLAIN, 13);
+
+    static void setLightMode(boolean enabled) {
+        LIGHT_MODE = enabled;
+
+        if (enabled) {
+            BG_DEEP    = new Color(235, 244, 255);
+            BG_PANEL   = new Color(248, 251, 255);
+            BG_CARD    = new Color(230, 241, 255);
+            BORDER_COL = new Color(146, 177, 230);
+            NEON_PINK  = new Color(214, 43, 152);
+            NEON_CYAN  = new Color(21, 132, 204);
+            NEON_MID   = new Color(126, 78, 190);
+            NEON_DIM   = new Color(96, 107, 150);
+            GOLD       = new Color(190, 132, 18);
+            TEXT_MAIN  = new Color(24, 37, 70);
+            TEXT_MUTED = new Color(78, 90, 124);
+        } else {
+            BG_DEEP    = new Color(8,   10,  20);
+            BG_PANEL   = new Color(12,  16,  32);
+            BG_CARD    = new Color(18,  22,  45);
+            BORDER_COL = new Color(40,  45,  90);
+            NEON_PINK  = new Color(255,  60, 180);
+            NEON_CYAN  = new Color(0,   220, 255);
+            NEON_MID   = new Color(160,  60, 200);
+            NEON_DIM   = new Color(60,   40, 100);
+            GOLD       = new Color(255, 210,  80);
+            TEXT_MAIN  = new Color(200, 220, 255);
+            TEXT_MUTED = new Color(90,  100, 160);
+        }
+    }
 
     private JTextField     usernameField;
     private JPasswordField passwordField;
@@ -73,6 +104,8 @@ public class LoginScreen extends JFrame {
         };
         root.setOpaque(false);
         JPanel card = buildCard();
+        clearFieldFocusOnBlankClick(root);
+        clearFieldFocusOnBlankClick(card);
         root.add(card);
         root.addComponentListener(new ComponentAdapter() {
             @Override
@@ -116,11 +149,21 @@ public class LoginScreen extends JFrame {
         // Password
         JLabel pLabel = makeLabel("PASSWORD");
         passwordField = new JPasswordField();
-        styleTextField(passwordField, "Enter your password");
+        stylePasswordField(passwordField, "Enter your password");
+        passwordField.addActionListener(e -> handleLogin());
 
         // Sign In button
         JButton signInBtn = makeButton("SIGN  IN", BG_CARD, NEON_CYAN, BORDER_COL);
         signInBtn.addActionListener(e -> handleLogin());
+
+        JButton themeBtn = makeButton(LIGHT_MODE ? "DARK MODE" : "LIGHT MODE", BG_CARD, NEON_PINK, BORDER_COL);
+        themeBtn.addActionListener(e -> {
+            setLightMode(!LIGHT_MODE);
+            dispose();
+            new LoginScreen(onLoginSuccess, onGoRegister);
+        });
+
+        JButton soundBtn = makeSoundToggleButton();
 
         // Register link
         JPanel linkRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 4, 0));
@@ -135,7 +178,13 @@ public class LoginScreen extends JFrame {
         linkBtn.setForeground(NEON_CYAN);
         linkBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         linkBtn.addMouseListener(new MouseAdapter() {
-            public void mouseClicked(MouseEvent e) { if (onGoRegister != null) onGoRegister.run(); }
+            public void mouseClicked(MouseEvent e) {
+                SoundFX.click();
+                if (onGoRegister != null) {
+                    dispose();
+                    onGoRegister.run();
+                }
+            }
             public void mouseEntered(MouseEvent e) { linkBtn.setForeground(NEON_PINK); }
             public void mouseExited(MouseEvent e)  { linkBtn.setForeground(NEON_CYAN); }
         });
@@ -158,7 +207,11 @@ public class LoginScreen extends JFrame {
         card.add(passwordField);
         card.add(Box.createVerticalStrut(24));
         card.add(signInBtn);
-        card.add(Box.createVerticalStrut(14));
+        card.add(Box.createVerticalStrut(10));
+        card.add(themeBtn);
+        card.add(Box.createVerticalStrut(10));
+        card.add(soundBtn);
+        card.add(Box.createVerticalStrut(10));
         card.add(linkRow);
 
         return card;
@@ -179,9 +232,10 @@ public class LoginScreen extends JFrame {
 
     private void handleLogin() {
         String user = usernameField.getText().trim();
-        String pass = new String(passwordField.getPassword()).trim();
+        String pass = getPasswordText(passwordField, "Enter your password").trim();
 
         if (user.isEmpty() || pass.isEmpty()) {
+            SoundFX.error();
             shake(usernameField.getParent().getParent());
             showCyberError("Missing Data", "Please fill in all fields.");
             return;
@@ -192,14 +246,18 @@ public class LoginScreen extends JFrame {
 
         // If the user is not found, it is null
         if (loggedInUser == null) {
+            SoundFX.error();
             showCyberError("Access Denied", "Invalid username or password.");
             return;
         }
 
         Session.login (loggedInUser);
+        SoundFX.success();
 
-        if (onLoginSuccess != null)
+        if (onLoginSuccess != null) {
+            dispose();
             onLoginSuccess.run();
+        }
 
     }
 
@@ -277,6 +335,57 @@ public class LoginScreen extends JFrame {
         });
     }
 
+    static void stylePasswordField(JPasswordField f, String placeholder) {
+        char echoChar = f.getEchoChar();
+        FocusListener[] originalFocusListeners = f.getFocusListeners();
+        styleTextField(f, placeholder);
+        for (FocusListener listener : f.getFocusListeners()) {
+            boolean wasOriginal = false;
+            for (FocusListener original : originalFocusListeners) {
+                if (listener == original) {
+                    wasOriginal = true;
+                    break;
+                }
+            }
+            if (!wasOriginal) {
+                f.removeFocusListener(listener);
+            }
+        }
+        f.setEchoChar((char) 0);
+
+        f.addFocusListener(new FocusAdapter() {
+            public void focusGained(FocusEvent e) {
+                if (new String(f.getPassword()).equals(placeholder)) {
+                    f.setText("");
+                    f.setForeground(TEXT_MAIN);
+                    f.setEchoChar(echoChar);
+                }
+            }
+
+            public void focusLost(FocusEvent e) {
+                if (new String(f.getPassword()).isEmpty()) {
+                    f.setEchoChar((char) 0);
+                    f.setText(placeholder);
+                    f.setForeground(NEON_DIM);
+                }
+            }
+        });
+    }
+
+    static String getPasswordText(JPasswordField f, String placeholder) {
+        String text = new String(f.getPassword());
+        return f.getForeground().equals(NEON_DIM) && text.equals(placeholder) ? "" : text;
+    }
+
+    static void clearFieldFocusOnBlankClick(JComponent component) {
+        component.setFocusable(true);
+        component.addMouseListener(new MouseAdapter() {
+            public void mousePressed(MouseEvent e) {
+                component.requestFocusInWindow();
+            }
+        });
+    }
+
     static JButton makeButton(String text, Color bg, Color fg, Color border) {
         JButton b = new JButton(text) {
             @Override protected void paintComponent(Graphics g) {
@@ -286,7 +395,7 @@ public class LoginScreen extends JFrame {
                 GradientPaint gp = new GradientPaint(0, 0,
                     getModel().isPressed() ? BG_CARD.brighter() : BG_CARD,
                     0, getHeight(),
-                    getModel().isPressed() ? BG_DEEP : new Color(25, 15, 40));
+                    getModel().isPressed() ? BG_DEEP : (LIGHT_MODE ? new Color(216, 232, 255) : new Color(25, 15, 40)));
                 g2.setPaint(gp);
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
                 // Neon border glow
@@ -304,6 +413,7 @@ public class LoginScreen extends JFrame {
         b.setAlignmentX(Component.CENTER_ALIGNMENT);
         b.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.addActionListener(e -> SoundFX.click());
         b.addMouseListener(new MouseAdapter() {
             public void mouseEntered(MouseEvent e) { b.setForeground(NEON_PINK); }
             public void mouseExited(MouseEvent e)  { b.setForeground(fg); }
@@ -311,10 +421,72 @@ public class LoginScreen extends JFrame {
         return b;
     }
 
+    static JButton makeSoundToggleButton() {
+        JButton b = new JButton() {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                Color iconColor = SoundFX.isEnabled() ? GOLD : TEXT_MUTED;
+                if (getModel().isRollover()) {
+                    iconColor = NEON_PINK;
+                }
+
+                g2.setColor(BG_CARD);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
+                g2.setColor(new Color(iconColor.getRed(), iconColor.getGreen(), iconColor.getBlue(), 170));
+                g2.setStroke(new BasicStroke(1.4f));
+                g2.drawRoundRect(1, 1, getWidth() - 2, getHeight() - 2, 8, 8);
+
+                int centerY = getHeight() / 2;
+                int left = getWidth() / 2 - 12;
+                Polygon speaker = new Polygon();
+                speaker.addPoint(left, centerY - 5);
+                speaker.addPoint(left + 5, centerY - 5);
+                speaker.addPoint(left + 11, centerY - 10);
+                speaker.addPoint(left + 11, centerY + 10);
+                speaker.addPoint(left + 5, centerY + 5);
+                speaker.addPoint(left, centerY + 5);
+                g2.setColor(iconColor);
+                g2.fillPolygon(speaker);
+
+                g2.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                if (SoundFX.isEnabled()) {
+                    g2.drawArc(left + 12, centerY - 7, 8, 14, -45, 90);
+                    g2.drawArc(left + 15, centerY - 10, 10, 20, -45, 90);
+                } else {
+                    g2.drawLine(left + 15, centerY - 8, left + 25, centerY + 8);
+                    g2.drawLine(left + 25, centerY - 8, left + 15, centerY + 8);
+                }
+            }
+        };
+        b.setContentAreaFilled(false);
+        b.setBorderPainted(false);
+        b.setFocusPainted(false);
+        b.setOpaque(false);
+        b.setPreferredSize(new Dimension(42, 34));
+        b.setMinimumSize(new Dimension(42, 34));
+        b.setMaximumSize(new Dimension(42, 34));
+        b.setAlignmentX(Component.CENTER_ALIGNMENT);
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.setToolTipText(SoundFX.isEnabled() ? "Mute" : "Unmute");
+        b.addActionListener(e -> {
+            SoundFX.toggle();
+            b.setToolTipText(SoundFX.isEnabled() ? "Mute" : "Unmute");
+            b.repaint();
+        });
+        return b;
+    }
+
     private void showCyberError(String title, String message) {
-        JDialog dialog = new JDialog(this, "Clixky Alert", true);
+        showCyberError(this, title, message);
+    }
+
+    static void showCyberError(Component parent, String title, String message) {
+        Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
+        JDialog dialog = new JDialog(owner, "Clixky Alert", Dialog.ModalityType.APPLICATION_MODAL);
         dialog.setSize(360, 210);
-        dialog.setLocationRelativeTo(this);
+        dialog.setLocationRelativeTo(parent);
         dialog.setResizable(false);
         dialog.setUndecorated(true);
 

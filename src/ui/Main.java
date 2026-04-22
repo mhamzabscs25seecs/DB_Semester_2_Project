@@ -36,15 +36,27 @@ public class Main {
     static void showRegister() {
         registerScreen = new RegisterScreen(
             () -> {
-                // Registration success → go to Dashboard
+                // Registration success -> profile setup, then dashboard
                 String user = Session.getCurrentUsername();
                 registerScreen.dispose();
-                showDashboard(user);
+                showProfileSetup(user);
             },
             () -> {
                 // "Sign in" link clicked → back to Login
                 registerScreen.dispose();
                 showLogin();
+            }
+        );
+    }
+
+    // ── PROFILE SETUP ────────────────────────────────────────
+    static ProfileSetupScreen profileSetupScreen;
+
+    static void showProfileSetup(String username) {
+        profileSetupScreen = new ProfileSetupScreen(
+            () -> {
+                profileSetupScreen.dispose();
+                showDashboard(username);
             }
         );
     }

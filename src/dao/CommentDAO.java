@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -77,5 +78,59 @@ public class CommentDAO {
         }
 
         return comments;
+    }
+
+    public int addComment(int postId, int userId, String body, Integer parentCommentId) {
+        String sql = """
+                INSERT INTO Comments (post_id, commenter_id, comment_body, parent_comment_id)
+                VALUES (?, ?, ?, ?)
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+
+            stmt.setInt(1, postId);
+            stmt.setInt(2, userId);
+            stmt.setString(3, body);
+
+            if (parentCommentId == null) {
+                stmt.setNull(4, java.sql.Types.INTEGER);
+            } else {
+                stmt.setInt(4, parentCommentId);
+            }
+
+            stmt.executeUpdate();
+
+            try (ResultSet keys = stmt.getGeneratedKeys()) {
+                if (keys.next()) {
+                    return keys.getInt(1);
+                }
+            }
+
+        } catch (SQLException e) {
+            System.out.println("Add comment database error: " + e.getMessage());
+        }
+
+        return 0;
+    }
+
+    public boolean deleteComment(int commentId, int userId) {
+        String sql = """
+                DELETE FROM Comments
+                WHERE comment_id = ? AND commenter_id = ?
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, commentId);
+            stmt.setInt(2, userId);
+            return stmt.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            System.out.println("Delete comment database error: " + e.getMessage());
+        }
+
+        return false;
     }
 }

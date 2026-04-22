@@ -1,5 +1,8 @@
 package ui;
 
+import dao.Session;
+import dao.VoteDAO;
+
 import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
@@ -16,6 +19,14 @@ public class CommentPanel extends JPanel {
 
     private static final int INDENT_PX = 18;
 
+    public interface ReplyHandler {
+        boolean saveReply(int parentCommentId, String text);
+    }
+
+    public interface DeleteHandler {
+        boolean deleteComment(int commentId);
+    }
+
     // ── Comment DTO ───────────────────────────────────────────────────────────
     public static class CommentData {
         public int    id, parentId, score;
@@ -29,7 +40,8 @@ public class CommentPanel extends JPanel {
     }
 
     // ── Build full tree panel ──────────────────────────────────────────────
-    public static JScrollPane buildTree(List<CommentData> flat, String currentUser, Runnable onReply) {
+    public static JScrollPane buildTree(List<CommentData> flat, String currentUser,
+                                        ReplyHandler onReply, DeleteHandler onDelete) {
         List<CommentData> roots = buildTree(flat);
 
         JPanel container = new JPanel();
@@ -38,14 +50,14 @@ public class CommentPanel extends JPanel {
         container.setBorder(new EmptyBorder(8, 0, 8, 0));
 
         JLabel header = new JLabel(flat.size() + " Comments");
-        header.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        header.setFont(new Font("Segoe UI", Font.BOLD, 15));
         header.setForeground(NEON_PINK);
         header.setBorder(new EmptyBorder(0, 0, 12, 0));
         header.setAlignmentX(Component.LEFT_ALIGNMENT);
         container.add(header);
 
         for (CommentData root : roots) {
-            container.add(new CommentPanel(root, 0, currentUser, onReply));
+            container.add(new CommentPanel(root, 0, currentUser, onReply, onDelete));
             container.add(Box.createVerticalStrut(8));
         }
 
@@ -74,15 +86,18 @@ public class CommentPanel extends JPanel {
     private final CommentData data;
     private final int depth;
     private final String currentUser;
-    private final Runnable onReply;
+    private final ReplyHandler onReply;
+    private final DeleteHandler onDelete;
     private boolean collapsed = false;
     private JPanel childrenPanel;
 
-    public CommentPanel(CommentData data, int depth, String currentUser, Runnable onReply) {
+    public CommentPanel(CommentData data, int depth, String currentUser,
+                        ReplyHandler onReply, DeleteHandler onDelete) {
         this.data = data;
         this.depth = depth;
         this.currentUser = currentUser;
         this.onReply = onReply;
+        this.onDelete = onDelete;
         buildNode();
     }
 
@@ -120,9 +135,9 @@ public class CommentPanel extends JPanel {
         outer.setOpaque(false);
 
         JPanel card = new JPanel(new BorderLayout(0, 8));
-        card.setBackground(depth == 0 ? new Color(12, 16, 32) : new Color(8, 12, 24));
+        card.setBackground(commentCardColor());
         card.setBorder(new CompoundBorder(
-            BorderFactory.createLineBorder(depth == 0 ? BORDER_COL : new Color(25, 28, 58), 1),
+            BorderFactory.createLineBorder(commentBorderColor(), 1),
             new EmptyBorder(10, 12, 10, 12)
         ));
 
@@ -145,23 +160,23 @@ public class CommentPanel extends JPanel {
         };
         avatar.setPreferredSize(new Dimension(22, 22));
         avatar.setHorizontalAlignment(SwingConstants.CENTER);
-        avatar.setFont(new Font("Segoe UI", Font.BOLD, 8));
+        avatar.setFont(new Font("Segoe UI", Font.BOLD, 10));
         avatar.setForeground(NEON_CYAN);
 
         JLabel authorLabel = new JLabel(data.author);
-        authorLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        authorLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
         authorLabel.setForeground(data.author.equals(currentUser) ? GOLD : NEON_MID);
 
         JLabel scoreLabel = new JLabel("▲ " + data.score);
-        scoreLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        scoreLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         scoreLabel.setForeground(data.score > 50 ? NEON_CYAN : TEXT_MUTED);
 
         JLabel timeLabel = new JLabel("· " + data.timestamp);
-        timeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        timeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         timeLabel.setForeground(NEON_DIM);
 
         JLabel collapseBtn = new JLabel(data.children.isEmpty() ? "" : "[–]");
-        collapseBtn.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        collapseBtn.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         collapseBtn.setForeground(NEON_DIM);
         collapseBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         collapseBtn.addMouseListener(new MouseAdapter() {
@@ -178,7 +193,7 @@ public class CommentPanel extends JPanel {
         authorRow.add(collapseBtn);
 
         // Body
-        JLabel bodyLabel = new JLabel("<html><body style='width:480px; color:#5a6090; font-family:Segoe UI; font-size:12px; line-height:1.6'>"
+        JLabel bodyLabel = new JLabel("<html><body style='width:480px; color:" + htmlColor(TEXT_MUTED) + "; font-family:Segoe UI; font-size:14px; line-height:1.6'>"
             + data.body + "</body></html>");
         bodyLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
@@ -189,21 +204,45 @@ public class CommentPanel extends JPanel {
         JButton upBtn    = makeActionBtn("▲ Upvote");
         JButton downBtn  = makeActionBtn("▼");
         JButton replyBtn = makeActionBtn("↩ Reply");
+        JButton deleteBtn = makeDeleteBtn("Delete");
+        final int[] currentVote = {
+                Session.isLoggedIn() ? new VoteDAO().getCommentUserVote(data.id, Session.getCurrentUserId()) : 0
+        };
+        updateCommentVoteButtons(upBtn, downBtn, scoreLabel, currentVote[0]);
 
         upBtn.addActionListener(e -> {
-            data.score++;
-            scoreLabel.setText("▲ " + data.score);
-            scoreLabel.setForeground(NEON_CYAN);
+            if (!Session.isLoggedIn()) {
+                JOptionPane.showMessageDialog(this, "Please log in first.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            int newScore = new VoteDAO().voteComment(data.id, Session.getCurrentUserId(), 1);
+            currentVote[0] = currentVote[0] == 1 ? 0 : 1;
+            data.score = newScore;
+            scoreLabel.setText("▲ " + newScore);
+            updateCommentVoteButtons(upBtn, downBtn, scoreLabel, currentVote[0]);
         });
         downBtn.addActionListener(e -> {
-            data.score--;
-            scoreLabel.setText("▲ " + data.score);
+            if (!Session.isLoggedIn()) {
+                JOptionPane.showMessageDialog(this, "Please log in first.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            int newScore = new VoteDAO().voteComment(data.id, Session.getCurrentUserId(), -1);
+            currentVote[0] = currentVote[0] == -1 ? 0 : -1;
+            data.score = newScore;
+            scoreLabel.setText("▲ " + newScore);
+            updateCommentVoteButtons(upBtn, downBtn, scoreLabel, currentVote[0]);
         });
         replyBtn.addActionListener(e -> showReplyComposer(outer));
+        deleteBtn.addActionListener(e -> handleDelete());
 
         actions.add(upBtn);
         actions.add(downBtn);
         actions.add(replyBtn);
+        if (isOwnComment()) {
+            actions.add(deleteBtn);
+        }
 
         card.add(authorRow, BorderLayout.NORTH);
         card.add(bodyLabel, BorderLayout.CENTER);
@@ -217,7 +256,7 @@ public class CommentPanel extends JPanel {
         childrenPanel.setBorder(new EmptyBorder(4, 0, 0, 0));
 
         for (CommentData child : data.children) {
-            childrenPanel.add(new CommentPanel(child, depth + 1, currentUser, onReply));
+            childrenPanel.add(new CommentPanel(child, depth + 1, currentUser, onReply, onDelete));
             childrenPanel.add(Box.createVerticalStrut(5));
         }
 
@@ -226,6 +265,58 @@ public class CommentPanel extends JPanel {
         }
 
         return outer;
+    }
+
+    private boolean isOwnComment() {
+        return data.author.equals(currentUser) || data.author.equals("u/" + currentUser);
+    }
+
+    private void handleDelete() {
+        int choice = JOptionPane.showConfirmDialog(
+                this,
+                "Delete this comment?",
+                "Clixky",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+        if (choice != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        boolean deleted = onDelete != null && onDelete.deleteComment(data.id);
+        if (!deleted) {
+            SoundFX.error();
+            JOptionPane.showMessageDialog(this, "Comment could not be deleted.", "Clixky", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        SoundFX.success();
+    }
+
+    private Color commentCardColor() {
+        if (LIGHT_MODE) {
+            return depth == 0 ? BG_PANEL : BG_CARD;
+        }
+
+        return depth == 0 ? BG_PANEL : BG_DEEP;
+    }
+
+    private Color commentBorderColor() {
+        if (depth == 0) {
+            return BORDER_COL;
+        }
+
+        return new Color(BORDER_COL.getRed(), BORDER_COL.getGreen(), BORDER_COL.getBlue(), LIGHT_MODE ? 180 : 120);
+    }
+
+    private void updateCommentVoteButtons(JButton upBtn, JButton downBtn, JLabel score, int currentVote) {
+        Color upColor = currentVote == 1 ? NEON_CYAN : TEXT_MUTED;
+        Color downColor = currentVote == -1 ? NEON_PINK : TEXT_MUTED;
+        upBtn.putClientProperty("normalForeground", upColor);
+        downBtn.putClientProperty("normalForeground", downColor);
+        upBtn.setForeground(upColor);
+        downBtn.setForeground(downColor);
+        score.setForeground(currentVote == 1 ? NEON_CYAN : currentVote == -1 ? NEON_PINK : TEXT_MUTED);
     }
 
     private void toggleCollapse(JLabel btn) {
@@ -255,14 +346,14 @@ public class CommentPanel extends JPanel {
         ));
 
         JLabel replyLabel = new JLabel("Replying to " + data.author);
-        replyLabel.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        replyLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
         replyLabel.setForeground(GOLD);
 
         JTextArea input = new JTextArea(3, 30);
         input.setBackground(BG_DEEP);
         input.setForeground(TEXT_MAIN);
         input.setCaretColor(NEON_CYAN);
-        input.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        input.setFont(new Font("Segoe UI", Font.PLAIN, 15));
         input.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(BORDER_COL),
             new EmptyBorder(6, 8, 6, 8)
@@ -284,10 +375,23 @@ public class CommentPanel extends JPanel {
         submit.addActionListener(e -> {
             String text = input.getText().trim();
             if (!text.isEmpty()) {
+                if (!Session.isLoggedIn()) {
+                    SoundFX.error();
+                    JOptionPane.showMessageDialog(this, "Please log in first.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+
+                boolean saved = onReply != null && onReply.saveReply(data.id, text);
+                if (!saved) {
+                    SoundFX.error();
+                    JOptionPane.showMessageDialog(this, "Reply could not be saved.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+
+                SoundFX.success();
                 parent.remove(replyBox);
                 parent.revalidate();
                 parent.repaint();
-                if (onReply != null) onReply.run();
             }
         });
 
@@ -306,18 +410,40 @@ public class CommentPanel extends JPanel {
 
     private JButton makeActionBtn(String text) {
         JButton b = new JButton(text);
-        b.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        b.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         b.setForeground(TEXT_MUTED);
         b.setContentAreaFilled(false);
         b.setBorderPainted(false);
         b.setFocusPainted(false);
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.addActionListener(e -> SoundFX.click());
         b.addMouseListener(new MouseAdapter() {
-            final Color orig = b.getForeground();
             public void mouseEntered(MouseEvent e) { b.setForeground(NEON_CYAN); }
-            public void mouseExited(MouseEvent e)  { b.setForeground(orig); }
+            public void mouseExited(MouseEvent e)  {
+                Color normal = (Color) b.getClientProperty("normalForeground");
+                b.setForeground(normal == null ? TEXT_MUTED : normal);
+            }
         });
         return b;
+    }
+
+    private JButton makeDeleteBtn(String text) {
+        JButton b = makeActionBtn(text);
+        b.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        b.setForeground(NEON_PINK);
+        b.putClientProperty("normalForeground", NEON_PINK);
+        b.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(NEON_PINK.getRed(), NEON_PINK.getGreen(), NEON_PINK.getBlue(), 160)),
+                new EmptyBorder(3, 10, 3, 10)
+        ));
+        b.setBorderPainted(true);
+        b.setPreferredSize(new Dimension(76, 28));
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return b;
+    }
+
+    private String htmlColor(Color color) {
+        return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
     }
 
     // ── Tree builder ──────────────────────────────────────────────────────

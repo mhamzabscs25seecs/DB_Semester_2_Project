@@ -154,7 +154,7 @@ public class UserDAO {
     }
 
     public RegisterResult register(String firstName, String lastName, String username, String email, String password) {
-        String display_name = firstName + " " + lastName;
+        String display_name = (firstName + " " + lastName).trim();
 
         String insertUserSQL = """
                 INSERT INTO Users (username, email, password_hash)
@@ -273,5 +273,41 @@ public class UserDAO {
         }
 
         return null;
+    }
+
+    public boolean updateProfile(int userId, String displayName, String bioText, String country,
+                                 String phoneNo, int birthYear, boolean isPrivate) {
+        String sql = """
+                UPDATE User_Profiles
+                SET display_name = ?,
+                    bio_text = ?,
+                    country = ?,
+                    phone_no = ?,
+                    birth_year = ?,
+                    is_private = ?
+                WHERE user_id = ?
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, displayName);
+            stmt.setString(2, blankToNull(bioText));
+            stmt.setString(3, blankToNull(country));
+            stmt.setString(4, blankToNull(phoneNo));
+            stmt.setInt(5, birthYear);
+            stmt.setInt(6, isPrivate ? 1 : 0);
+            stmt.setInt(7, userId);
+            return stmt.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            System.out.println("Update profile database error: " + e.getMessage());
+        }
+
+        return false;
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

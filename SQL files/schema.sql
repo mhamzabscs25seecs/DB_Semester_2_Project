@@ -77,7 +77,7 @@ post_id INTEGER PRIMARY KEY AUTOINCREMENT,
 posted_by INTEGER NOT NULL,
 community_id INTEGER NOT NULL,
 title TEXT NOT NULL CHECK(LENGTH(title) <= 100),
-body TEXT CHECK(LENGTH(body) <= 5000),
+body TEXT NOT NULL CHECK(LENGTH(TRIM(body)) > 0 AND LENGTH(body) <= 5000),
 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 updated_at DATETIME,
 
@@ -143,6 +143,5 @@ FOREIGN KEY (comment_voter_id) REFERENCES Users (user_id)
 											
 UNIQUE (comment_voter_id, comment_id)
 );
-
 
 

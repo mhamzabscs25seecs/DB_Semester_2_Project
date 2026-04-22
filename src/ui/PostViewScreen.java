@@ -1,6 +1,8 @@
 package ui;
 
 import dao.CommentDAO;
+import dao.Session;
+import dao.VoteDAO;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -29,9 +31,7 @@ public class PostViewScreen extends JFrame {
     private void buildUI() {
         setTitle("Clixky — " + post.title);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setSize(1100, 700);
-        setMinimumSize(new Dimension(800, 540));
-        setLocationRelativeTo(null);
+        WindowState.apply(this, new Dimension(1100, 700), new Dimension(800, 540));
         setResizable(true);
 
         JPanel root = new JPanel(new BorderLayout());
@@ -43,11 +43,17 @@ public class PostViewScreen extends JFrame {
         setVisible(true);
     }
 
+    @Override
+    public void dispose() {
+        WindowState.remember(this);
+        super.dispose();
+    }
+
     // ── TOP BAR ───────────────────────────────────────────────────────────────
 
     private JPanel buildTopBar() {
         JPanel bar = new JPanel(new BorderLayout(12, 0));
-        bar.setBackground(new Color(6, 8, 18));
+        bar.setBackground(BG_DEEP);
         bar.setBorder(new CompoundBorder(
             new MatteBorder(0, 0, 1, 0, new Color(NEON_PINK.getRed(), NEON_PINK.getGreen(), NEON_PINK.getBlue(), 80)),
             new EmptyBorder(0, 16, 0, 16)
@@ -55,19 +61,34 @@ public class PostViewScreen extends JFrame {
         bar.setPreferredSize(new Dimension(0, 48));
 
         JLabel logo = new JLabel("CLIXKY");
-        logo.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        logo.setFont(new Font("Segoe UI", Font.BOLD, 18));
         logo.setForeground(NEON_PINK);
 
         JButton backBtn = makeSmallButton("← Back to Feed", BG_CARD, TEXT_MUTED, BORDER_COL);
-        backBtn.addActionListener(e -> { if (onBack != null) onBack.run(); });
+        backBtn.addActionListener(e -> {
+            if (onBack != null) {
+                dispose();
+                onBack.run();
+            }
+        });
+
+        JButton themeBtn = makeSmallButton(LIGHT_MODE ? "Dark" : "Light", BG_PANEL, NEON_PINK, BORDER_COL);
+        themeBtn.addActionListener(e -> {
+            setLightMode(!LIGHT_MODE);
+            dispose();
+            new PostViewScreen(post, currentUser, onBack);
+        });
+        JButton soundBtn = makeSoundToggleButton();
 
         JLabel userLabel = new JLabel(currentUser);
-        userLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        userLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         userLabel.setForeground(NEON_MID);
 
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 8));
         right.setOpaque(false);
         right.add(backBtn);
+        right.add(themeBtn);
+        right.add(soundBtn);
         right.add(userLabel);
 
         bar.add(logo,  BorderLayout.WEST);
@@ -98,9 +119,32 @@ public class PostViewScreen extends JFrame {
         main.add(buildPostCard(),      BorderLayout.NORTH);
         main.add(buildReplyComposer(), BorderLayout.CENTER);
 
-        commentsScroll = CommentPanel.buildTree(loadComments(), currentUser, () ->
-                JOptionPane.showMessageDialog(this, "Reply saved in UI only for now.", "Clixky", JOptionPane.INFORMATION_MESSAGE)
-        );
+        CommentDAO commentDAO = new CommentDAO();
+        commentsScroll = CommentPanel.buildTree(loadComments(), currentUser, (parentCommentId, text) -> {
+            int commentId = commentDAO.addComment(post.id, Session.getCurrentUserId(), text, parentCommentId);
+            if (commentId == 0) {
+                return false;
+            }
+
+            post.comments++;
+            SwingUtilities.invokeLater(() -> {
+                dispose();
+                new PostViewScreen(post, currentUser, onBack);
+            });
+            return true;
+        }, commentId -> {
+            boolean deleted = commentDAO.deleteComment(commentId, Session.getCurrentUserId());
+            if (!deleted) {
+                return false;
+            }
+
+            post.comments = commentDAO.getCommentsForPost(post.id).size();
+            SwingUtilities.invokeLater(() -> {
+                dispose();
+                new PostViewScreen(post, currentUser, onBack);
+            });
+            return true;
+        });
         commentsScroll.setBorder(new MatteBorder(1, 0, 0, 0,
             new Color(NEON_PINK.getRed(), NEON_PINK.getGreen(), NEON_PINK.getBlue(), 60)));
         commentsScroll.setPreferredSize(new Dimension(0, 380));
@@ -148,20 +192,38 @@ public class PostViewScreen extends JFrame {
 
         JButton upBtn   = makeBigVoteBtn("▲", true);
         scoreLabel = new JLabel(String.valueOf(post.score));
-        scoreLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        scoreLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
         scoreLabel.setForeground(NEON_CYAN);
         scoreLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         JButton downBtn = makeBigVoteBtn("▼", false);
+        final int[] currentVote = {
+                Session.isLoggedIn() ? new VoteDAO().getPostUserVote(post.id, Session.getCurrentUserId()) : 0
+        };
+        updatePostVoteButtons(upBtn, downBtn, scoreLabel, currentVote[0]);
 
         upBtn.addActionListener(e -> {
-            post.score++;
-            scoreLabel.setText(String.valueOf(post.score));
-            scoreLabel.setForeground(NEON_CYAN);
+            if (!Session.isLoggedIn()) {
+                JOptionPane.showMessageDialog(this, "Please log in first.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            int newScore = new VoteDAO().votePost(post.id, Session.getCurrentUserId(), 1);
+            currentVote[0] = currentVote[0] == 1 ? 0 : 1;
+            post.score = newScore;
+            scoreLabel.setText(String.valueOf(newScore));
+            updatePostVoteButtons(upBtn, downBtn, scoreLabel, currentVote[0]);
         });
         downBtn.addActionListener(e -> {
-            post.score--;
-            scoreLabel.setText(String.valueOf(post.score));
-            scoreLabel.setForeground(NEON_PINK);
+            if (!Session.isLoggedIn()) {
+                JOptionPane.showMessageDialog(this, "Please log in first.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            int newScore = new VoteDAO().votePost(post.id, Session.getCurrentUserId(), -1);
+            currentVote[0] = currentVote[0] == -1 ? 0 : -1;
+            post.score = newScore;
+            scoreLabel.setText(String.valueOf(newScore));
+            updatePostVoteButtons(upBtn, downBtn, scoreLabel, currentVote[0]);
         });
 
         voteCol.add(Box.createVerticalGlue());
@@ -177,15 +239,14 @@ public class PostViewScreen extends JFrame {
         content.setOpaque(false);
 
         JLabel breadcrumb = new JLabel(post.subreddit + "  ·  Posted by " + post.author + "  ·  " + post.time);
-        breadcrumb.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        breadcrumb.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         breadcrumb.setForeground(NEON_DIM);
 
-        JLabel title = new JLabel("<html><body style='width:580px; font-family:Segoe UI; font-size:15px; font-weight:bold; color:#e0e8ff'>"
+        JLabel title = new JLabel("<html><body style='width:580px; font-family:Segoe UI; font-size:17px; font-weight:bold; color:" + htmlColor(TEXT_MAIN) + "'>"
             + post.title + "</body></html>");
 
-        JLabel body = new JLabel("<html><body style='width:580px; font-family:Segoe UI; font-size:13px; color:#5a6090; line-height:1.7'>"
-            + "This is the full post body. In your app, load this from PostDAO.getPostById(" + post.id + "). "
-            + "It can include multi-paragraph text, questions, or discussions that community members can engage with."
+        JLabel body = new JLabel("<html><body style='width:580px; font-family:Segoe UI; font-size:15px; color:" + htmlColor(TEXT_MUTED) + "; line-height:1.7'>"
+            + escapeHtml(post.body)
             + "</body></html>");
 
         // Action bar
@@ -209,20 +270,30 @@ public class PostViewScreen extends JFrame {
         return card;
     }
 
+    private void updatePostVoteButtons(JButton upBtn, JButton downBtn, JLabel score, int currentVote) {
+        Color upColor = currentVote == 1 ? NEON_CYAN : NEON_MID;
+        Color downColor = currentVote == -1 ? NEON_PINK : TEXT_MUTED;
+        upBtn.putClientProperty("normalForeground", upColor);
+        downBtn.putClientProperty("normalForeground", downColor);
+        upBtn.setForeground(upColor);
+        downBtn.setForeground(downColor);
+        score.setForeground(currentVote == 1 ? NEON_CYAN : currentVote == -1 ? NEON_PINK : TEXT_MUTED);
+    }
+
     private JPanel buildReplyComposer() {
         JPanel box = new RoundPanel(8, BG_PANEL, BORDER_COL);
         box.setLayout(new BorderLayout(0, 10));
         box.setBorder(new EmptyBorder(14, 14, 14, 14));
 
         JLabel heading = new JLabel("Add a comment as  " + currentUser);
-        heading.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        heading.setFont(new Font("Segoe UI", Font.BOLD, 14));
         heading.setForeground(NEON_MID);
 
         JTextArea input = new JTextArea(3, 40);
         input.setBackground(BG_DEEP);
         input.setForeground(TEXT_MAIN);
         input.setCaretColor(NEON_CYAN);
-        input.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        input.setFont(new Font("Segoe UI", Font.PLAIN, 15));
         input.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(BORDER_COL),
             new EmptyBorder(8, 10, 8, 10)
@@ -244,8 +315,24 @@ public class PostViewScreen extends JFrame {
         submitBtn.addActionListener(e -> {
             String text = input.getText().trim();
             if (!text.isEmpty()) {
+                if (!Session.isLoggedIn()) {
+                    SoundFX.error();
+                    JOptionPane.showMessageDialog(this, "Please log in first.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+
+                int commentId = new CommentDAO().addComment(post.id, Session.getCurrentUserId(), text, null);
+                if (commentId == 0) {
+                    SoundFX.error();
+                    JOptionPane.showMessageDialog(this, "Comment could not be saved.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+
+                SoundFX.success();
                 input.setText("");
-                JOptionPane.showMessageDialog(this, "Comment posted!", "Clixky", JOptionPane.INFORMATION_MESSAGE);
+                post.comments++;
+                dispose();
+                new PostViewScreen(post, currentUser, onBack);
             }
         });
 
@@ -262,7 +349,7 @@ public class PostViewScreen extends JFrame {
 
     private JPanel buildSidebar() {
         JPanel sidebar = new JPanel(new BorderLayout());
-        sidebar.setBackground(new Color(6, 8, 18));
+        sidebar.setBackground(BG_DEEP);
         sidebar.setBorder(new CompoundBorder(
             new MatteBorder(0, 1, 0, 0, new Color(NEON_PINK.getRed(), NEON_PINK.getGreen(), NEON_PINK.getBlue(), 50)),
             new EmptyBorder(16, 14, 16, 14)
@@ -286,7 +373,7 @@ public class PostViewScreen extends JFrame {
         card.setBorder(new EmptyBorder(14, 14, 14, 14));
 
         JLabel name = new JLabel(post.subreddit);
-        name.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        name.setFont(new Font("Segoe UI", Font.BOLD, 17));
         name.setForeground(NEON_PINK);
         name.setAlignmentX(Component.LEFT_ALIGNMENT);
 
@@ -325,7 +412,7 @@ public class PostViewScreen extends JFrame {
         section.setOpaque(false);
 
         JLabel header = new JLabel("TOP TODAY");
-        header.setFont(new Font("Segoe UI", Font.BOLD, 9));
+        header.setFont(new Font("Segoe UI", Font.BOLD, 11));
         header.setForeground(NEON_DIM);
         header.setAlignmentX(Component.LEFT_ALIGNMENT);
         header.setBorder(new EmptyBorder(0, 0, 8, 0));
@@ -340,7 +427,7 @@ public class PostViewScreen extends JFrame {
 
         for (String t : tops) {
             JLabel l = new JLabel("<html><body style='width:180px'>" + t + "</body></html>");
-            l.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+            l.setFont(new Font("Segoe UI", Font.PLAIN, 14));
             l.setForeground(TEXT_MUTED);
             l.setBorder(BorderFactory.createCompoundBorder(
                 new MatteBorder(0, 0, 1, 0, new Color(18, 20, 45)),
@@ -364,11 +451,11 @@ public class PostViewScreen extends JFrame {
         p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
         p.setOpaque(false);
         JLabel v = new JLabel(value);
-        v.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        v.setFont(new Font("Segoe UI", Font.BOLD, 18));
         v.setForeground(NEON_CYAN);
         v.setAlignmentX(Component.CENTER_ALIGNMENT);
         JLabel l = new JLabel(label);
-        l.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        l.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         l.setForeground(NEON_DIM);
         l.setAlignmentX(Component.CENTER_ALIGNMENT);
         p.add(v);
@@ -382,7 +469,7 @@ public class PostViewScreen extends JFrame {
 
     private JLabel makeChip(String text, Runnable onClick) {
         JLabel l = new JLabel(text);
-        l.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        l.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         l.setForeground(TEXT_MUTED);
         l.setBorder(new CompoundBorder(
             BorderFactory.createLineBorder(BORDER_COL, 1),
@@ -391,6 +478,7 @@ public class PostViewScreen extends JFrame {
         l.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         l.addMouseListener(new MouseAdapter() {
             public void mouseClicked(MouseEvent e) {
+                SoundFX.click();
                 if (onClick != null) {
                     onClick.run();
                 }
@@ -420,9 +508,13 @@ public class PostViewScreen extends JFrame {
         b.setFocusPainted(false);
         b.setAlignmentX(Component.CENTER_ALIGNMENT);
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.addActionListener(e -> SoundFX.click());
         b.addMouseListener(new MouseAdapter() {
             public void mouseEntered(MouseEvent e) { b.setForeground(isUp ? NEON_CYAN : NEON_PINK); }
-            public void mouseExited(MouseEvent e)  { b.setForeground(isUp ? NEON_MID : TEXT_MUTED); }
+            public void mouseExited(MouseEvent e)  {
+                Color normal = (Color) b.getClientProperty("normalForeground");
+                b.setForeground(normal == null ? (isUp ? NEON_MID : TEXT_MUTED) : normal);
+            }
         });
         return b;
     }
@@ -441,10 +533,15 @@ public class PostViewScreen extends JFrame {
                 .replace("\n", "<br>");
     }
 
+    private String htmlColor(Color color) {
+        return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
+    }
+
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             PostData samplePost = new PostData(
                 2, "3NF vs BCNF — When does it actually matter in production?",
+                "BCNF can matter when dependencies overlap in a schema.",
                 "u/hamza_dev", "r/DatabaseDesign", "6h ago", 412, 47
             );
             new PostViewScreen(samplePost, "hamza_dev", () -> System.out.println("Back clicked"));
