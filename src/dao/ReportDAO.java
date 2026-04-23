@@ -79,6 +79,14 @@ public class ReportDAO {
     }
 
     public List<AdminReportRow> getAdminReportRows() {
+        return getReportRows(null);
+    }
+
+    public List<AdminReportRow> getReportsByUser(int userId) {
+        return getReportRows(userId);
+    }
+
+    private List<AdminReportRow> getReportRows(Integer reporterId) {
         List<AdminReportRow> reports = new ArrayList<>();
         String sql = """
                 SELECT
@@ -100,27 +108,37 @@ public class ReportDAO {
                 LEFT JOIN Posts p ON r.target_type = 'post' AND r.target_id = p.post_id
                 LEFT JOIN Comments cm ON r.target_type = 'comment' AND r.target_id = cm.comment_id
                 LEFT JOIN Communities c ON r.target_type = 'community' AND r.target_id = c.community_id
+                WHERE (? IS NULL OR r.reported_by = ?)
                 ORDER BY r.created_at DESC
                 """;
 
         try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-            while (rs.next()) {
-                reports.add(new AdminReportRow(
-                        rs.getInt("report_id"),
-                        rs.getString("reporter"),
-                        rs.getString("target_type"),
-                        rs.getInt("target_id"),
-                        rs.getString("target_title"),
-                        rs.getString("reason"),
-                        rs.getString("details"),
-                        rs.getString("status"),
-                        rs.getString("created_at")
-                ));
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            if (reporterId == null) {
+                stmt.setNull(1, java.sql.Types.INTEGER);
+                stmt.setNull(2, java.sql.Types.INTEGER);
+            } else {
+                stmt.setInt(1, reporterId);
+                stmt.setInt(2, reporterId);
+            }
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    reports.add(new AdminReportRow(
+                            rs.getInt("report_id"),
+                            rs.getString("reporter"),
+                            rs.getString("target_type"),
+                            rs.getInt("target_id"),
+                            rs.getString("target_title"),
+                            rs.getString("reason"),
+                            rs.getString("details"),
+                            rs.getString("status"),
+                            rs.getString("created_at")
+                    ));
+                }
             }
         } catch (SQLException e) {
-            System.out.println("Admin reports database error: " + e.getMessage());
+            System.out.println("Reports database error: " + e.getMessage());
         }
 
         return reports;

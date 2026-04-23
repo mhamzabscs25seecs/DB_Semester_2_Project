@@ -363,6 +363,7 @@ public class LoginScreen extends JFrame {
     }
 
     static void styleTextField(JTextField f, String placeholder) {
+        f.putClientProperty("clixky.placeholder", placeholder);
         f.setFont(FONT_INPUT);
         f.setBackground(BG_DEEP);
         f.setForeground(TEXT_MAIN);
@@ -390,8 +391,8 @@ public class LoginScreen extends JFrame {
             }
             public void focusLost(FocusEvent e) {
                 if (f.getText().isEmpty()) {
-                    f.setText(placeholder);
                     f.setForeground(NEON_DIM);
+                    f.setText(placeholder);
                 }
                 f.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createLineBorder(BORDER_COL, 1),
@@ -458,7 +459,12 @@ public class LoginScreen extends JFrame {
 
     static String getPasswordText(JPasswordField f, String placeholder) {
         String text = new String(f.getPassword());
-        return f.getForeground().equals(NEON_DIM) && text.equals(placeholder) ? "" : text;
+        return isPlaceholderText(f) || text.equals(placeholder) && f.getForeground().equals(NEON_DIM) ? "" : text;
+    }
+
+    static boolean isPlaceholderText(JTextField field) {
+        Object placeholder = field.getClientProperty("clixky.placeholder");
+        return placeholder instanceof String text && field.getText().equals(text);
     }
 
     static void clearFieldFocusOnBlankClick(JComponent component) {

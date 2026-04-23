@@ -5,6 +5,7 @@ import dao.ReportDAO;
 import dao.SavedPostDAO;
 import dao.Session;
 import dao.UserDAO;
+import dao.UserFollowDAO;
 import dao.VoteDAO;
 
 import javax.swing.*;
@@ -75,6 +76,8 @@ public class PostViewScreen extends JFrame {
             }
         });
 
+        JButton chatBtn = makeSmallButton("Chat", BG_CARD, NEON_CYAN, BORDER_COL);
+        chatBtn.addActionListener(e -> ChatWindow.showChat());
         JButton themeBtn = makeSmallButton(LIGHT_MODE ? "Dark" : "Light", BG_PANEL, NEON_PINK, BORDER_COL);
         themeBtn.addActionListener(e -> {
             setLightMode(!LIGHT_MODE);
@@ -90,6 +93,7 @@ public class PostViewScreen extends JFrame {
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 8));
         right.setOpaque(false);
         right.add(backBtn);
+        right.add(chatBtn);
         right.add(themeBtn);
         right.add(soundBtn);
         right.add(userLabel);
@@ -275,7 +279,7 @@ public class PostViewScreen extends JFrame {
         actions.setOpaque(false);
         actions.setAlignmentX(Component.LEFT_ALIGNMENT);
         actions.add(makeChip("💬  " + post.comments + " Comments", this::toggleComments));
-        actions.add(makeChip("↗  Share"));
+        actions.add(makeChip("↗  Share", this::sharePost));
         JLabel saveChip = makeChip(new SavedPostDAO().isPostSaved(Session.getCurrentUserId(), post.id)
                 ? "🔖  Saved"
                 : "🔖  Save");
@@ -339,6 +343,20 @@ public class PostViewScreen extends JFrame {
 
         SoundFX.success();
         JOptionPane.showMessageDialog(this, "Report submitted.", "Clixky", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void sharePost() {
+        String shareText = "Clixky post #" + post.id + "\n"
+                + post.title + "\n"
+                + post.subreddit + " by " + post.author + "\n"
+                + "Open Clixky and search for post id " + post.id + ".";
+
+        Toolkit.getDefaultToolkit()
+                .getSystemClipboard()
+                .setContents(new java.awt.datatransfer.StringSelection(shareText), null);
+
+        SoundFX.success();
+        JOptionPane.showMessageDialog(this, "Post reference copied to clipboard.", "Clixky", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private JPanel buildClickableBreadcrumb() {
@@ -407,7 +425,7 @@ public class PostViewScreen extends JFrame {
         }
 
         JDialog dialog = new JDialog(this, "Clixky Profile", true);
-        dialog.setSize(390, 390);
+        dialog.setSize(430, 640);
         dialog.setLocationRelativeTo(this);
         dialog.setResizable(false);
         dialog.setUndecorated(true);
@@ -459,11 +477,49 @@ public class PostViewScreen extends JFrame {
         card.add(profileRow("COUNTRY", nullToFallback(profile.getCountry(), "Not set")));
         card.add(profileRow("BIRTH YEAR", String.valueOf(profile.getBirthYear())));
         card.add(profileRow("PRIVACY", profile.isPrivate() ? "Private" : "Public"));
-        card.add(Box.createVerticalStrut(18));
+        card.add(Box.createVerticalStrut(12));
+        card.add(new FollowingPanel(profile.getUserId()));
+        card.add(Box.createVerticalStrut(12));
+        card.add(buildFollowAction(profile));
+        card.add(Box.createVerticalStrut(8));
         card.add(close);
 
         dialog.setContentPane(card);
         dialog.setVisible(true);
+    }
+
+    private JButton buildFollowAction(UserDAO.UserProfile profile) {
+        UserFollowDAO followDAO = new UserFollowDAO();
+        boolean ownProfile = profile.getUserId() == Session.getCurrentUserId();
+        boolean following = !ownProfile && followDAO.isFollowing(Session.getCurrentUserId(), profile.getUserId());
+
+        JButton follow = makeButton(following ? "UNFOLLOW" : "FOLLOW", BG_CARD, following ? TEXT_MUTED : NEON_PINK, BORDER_COL);
+        follow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        follow.setEnabled(!ownProfile);
+        if (ownProfile) {
+            follow.setText("YOUR PROFILE");
+        }
+
+        follow.addActionListener(e -> {
+            if (!Session.isLoggedIn()) {
+                JOptionPane.showMessageDialog(this, "Please log in first.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            boolean ok = followDAO.toggleFollow(Session.getCurrentUserId(), profile.getUserId());
+            if (!ok) {
+                SoundFX.error();
+                JOptionPane.showMessageDialog(this, "Follow action failed.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            boolean nowFollowing = followDAO.isFollowing(Session.getCurrentUserId(), profile.getUserId());
+            follow.setText(nowFollowing ? "UNFOLLOW" : "FOLLOW");
+            follow.setForeground(nowFollowing ? TEXT_MUTED : NEON_PINK);
+            SoundFX.success();
+        });
+
+        return follow;
     }
 
     private JPanel profileRow(String label, String value) {
@@ -696,6 +752,13 @@ public class PostViewScreen extends JFrame {
             BorderFactory.createLineBorder(BORDER_COL, 1),
             new EmptyBorder(4, 10, 4, 10)
         ));
+        l.setToolTipText(text);
+        Dimension preferred = l.getPreferredSize();
+        int minWidth = text.contains("Comments") ? 150 : Math.max(92, preferred.width + 10);
+        int minHeight = Math.max(30, preferred.height);
+        Dimension chipSize = new Dimension(minWidth, minHeight);
+        l.setPreferredSize(chipSize);
+        l.setMinimumSize(chipSize);
         l.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         l.addMouseListener(new MouseAdapter() {
             public void mouseClicked(MouseEvent e) {

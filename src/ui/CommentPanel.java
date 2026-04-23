@@ -3,6 +3,7 @@ package ui;
 import dao.Session;
 import dao.ReportDAO;
 import dao.UserDAO;
+import dao.UserFollowDAO;
 import dao.VoteDAO;
 
 import javax.swing.*;
@@ -303,7 +304,7 @@ public class CommentPanel extends JPanel {
         }
 
         JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(this), "Clixky Profile", Dialog.ModalityType.APPLICATION_MODAL);
-        dialog.setSize(390, 390);
+        dialog.setSize(430, 640);
         dialog.setLocationRelativeTo(this);
         dialog.setResizable(false);
         dialog.setUndecorated(true);
@@ -355,11 +356,49 @@ public class CommentPanel extends JPanel {
         card.add(profileRow("COUNTRY", nullToFallback(profile.getCountry(), "Not set")));
         card.add(profileRow("BIRTH YEAR", String.valueOf(profile.getBirthYear())));
         card.add(profileRow("PRIVACY", profile.isPrivate() ? "Private" : "Public"));
-        card.add(Box.createVerticalStrut(18));
+        card.add(Box.createVerticalStrut(12));
+        card.add(new FollowingPanel(profile.getUserId()));
+        card.add(Box.createVerticalStrut(12));
+        card.add(buildFollowAction(profile));
+        card.add(Box.createVerticalStrut(8));
         card.add(close);
 
         dialog.setContentPane(card);
         dialog.setVisible(true);
+    }
+
+    private JButton buildFollowAction(UserDAO.UserProfile profile) {
+        UserFollowDAO followDAO = new UserFollowDAO();
+        boolean ownProfile = profile.getUserId() == Session.getCurrentUserId();
+        boolean following = !ownProfile && followDAO.isFollowing(Session.getCurrentUserId(), profile.getUserId());
+
+        JButton follow = makeButton(following ? "UNFOLLOW" : "FOLLOW", BG_CARD, following ? TEXT_MUTED : NEON_PINK, BORDER_COL);
+        follow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        follow.setEnabled(!ownProfile);
+        if (ownProfile) {
+            follow.setText("YOUR PROFILE");
+        }
+
+        follow.addActionListener(e -> {
+            if (!Session.isLoggedIn()) {
+                JOptionPane.showMessageDialog(this, "Please log in first.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            boolean ok = followDAO.toggleFollow(Session.getCurrentUserId(), profile.getUserId());
+            if (!ok) {
+                SoundFX.error();
+                JOptionPane.showMessageDialog(this, "Follow action failed.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            boolean nowFollowing = followDAO.isFollowing(Session.getCurrentUserId(), profile.getUserId());
+            follow.setText(nowFollowing ? "UNFOLLOW" : "FOLLOW");
+            follow.setForeground(nowFollowing ? TEXT_MUTED : NEON_PINK);
+            SoundFX.success();
+        });
+
+        return follow;
     }
 
     private JPanel profileRow(String label, String value) {

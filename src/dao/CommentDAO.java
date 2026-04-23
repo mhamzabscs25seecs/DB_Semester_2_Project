@@ -9,6 +9,34 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CommentDAO {
+    public static class UserCommentRow {
+        private final int commentId;
+        private final int postId;
+        private final String postTitle;
+        private final String community;
+        private final String body;
+        private final String commentedAt;
+        private final int score;
+
+        public UserCommentRow(int commentId, int postId, String postTitle, String community,
+                              String body, String commentedAt, int score) {
+            this.commentId = commentId;
+            this.postId = postId;
+            this.postTitle = postTitle;
+            this.community = community;
+            this.body = body;
+            this.commentedAt = commentedAt;
+            this.score = score;
+        }
+
+        public int getCommentId() { return commentId; }
+        public int getPostId() { return postId; }
+        public String getPostTitle() { return postTitle; }
+        public String getCommunity() { return community; }
+        public String getBody() { return body; }
+        public String getCommentedAt() { return commentedAt; }
+        public int getScore() { return score; }
+    }
 
     public static class CommentRecord {
         private final int commentId;
@@ -146,5 +174,90 @@ public class CommentDAO {
         }
 
         return false;
+    }
+
+    public List<UserCommentRow> getCommentsByUser(int userId) {
+        List<UserCommentRow> comments = new ArrayList<>();
+        String sql = """
+                SELECT
+                    cm.comment_id,
+                    cm.post_id,
+                    p.title,
+                    c.community_name,
+                    cm.comment_body,
+                    cm.commented_at,
+                    COALESCE(SUM(cv.comment_vote_type), 0) AS score
+                FROM Comments cm
+                JOIN Posts p ON cm.post_id = p.post_id
+                JOIN Communities c ON p.community_id = c.community_id
+                LEFT JOIN Comment_Votes cv ON cm.comment_id = cv.comment_id
+                WHERE cm.commenter_id = ?
+                GROUP BY cm.comment_id, cm.post_id, p.title, c.community_name, cm.comment_body, cm.commented_at
+                ORDER BY cm.commented_at DESC
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, userId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    comments.add(new UserCommentRow(
+                            rs.getInt("comment_id"),
+                            rs.getInt("post_id"),
+                            rs.getString("title"),
+                            rs.getString("community_name"),
+                            rs.getString("comment_body"),
+                            rs.getString("commented_at"),
+                            rs.getInt("score")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            System.out.println("User comments database error: " + e.getMessage());
+        }
+
+        return comments;
+    }
+
+    public List<UserCommentRow> getAdminCommentRows() {
+        List<UserCommentRow> comments = new ArrayList<>();
+        String sql = """
+                SELECT
+                    cm.comment_id,
+                    cm.post_id,
+                    p.title,
+                    c.community_name,
+                    u.username || ': ' || cm.comment_body AS comment_body,
+                    cm.commented_at,
+                    COALESCE(SUM(cv.comment_vote_type), 0) AS score
+                FROM Comments cm
+                JOIN Users u ON cm.commenter_id = u.user_id
+                JOIN Posts p ON cm.post_id = p.post_id
+                JOIN Communities c ON p.community_id = c.community_id
+                LEFT JOIN Comment_Votes cv ON cm.comment_id = cv.comment_id
+                GROUP BY cm.comment_id, cm.post_id, p.title, c.community_name, u.username, cm.comment_body, cm.commented_at
+                ORDER BY cm.commented_at DESC
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                comments.add(new UserCommentRow(
+                        rs.getInt("comment_id"),
+                        rs.getInt("post_id"),
+                        rs.getString("title"),
+                        rs.getString("community_name"),
+                        rs.getString("comment_body"),
+                        rs.getString("commented_at"),
+                        rs.getInt("score")
+                ));
+            }
+        } catch (SQLException e) {
+            System.out.println("Admin comments database error: " + e.getMessage());
+        }
+
+        return comments;
     }
 }

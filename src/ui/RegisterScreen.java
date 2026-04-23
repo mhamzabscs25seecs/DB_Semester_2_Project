@@ -341,8 +341,7 @@ public class RegisterScreen extends JFrame {
 
     private String getText(JTextField f) {
         String t = f.getText().trim();
-        Color fg = f.getForeground();
-        if (fg.equals(NEON_DIM)) return "";
+        if (isPlaceholderText(f)) return "";
         return t;
     }
 

@@ -5,6 +5,7 @@ import dao.Session;
 import dao.UserDAO;
 import dao.VoteDAO;
 import dao.CommunityDAO;
+import dao.CommentDAO;
 import dao.ReportDAO;
 
 import javax.swing.*;
@@ -26,6 +27,7 @@ public class DashboardScreen extends JFrame {
     private Integer selectedCommunityId;
     private String selectedCommunityName;
     private String searchQuery = "";
+    private String activeView = "feed";
 
     public DashboardScreen(String username, java.util.function.Consumer<PostData> onOpenPost) {
         this(username, onOpenPost, null, null);
@@ -37,6 +39,15 @@ public class DashboardScreen extends JFrame {
         this.onOpenPost   = onOpenPost;
         this.selectedCommunityId = selectedCommunityId;
         this.selectedCommunityName = selectedCommunityName;
+        this.activeView = "feed";
+        buildUI();
+    }
+
+    public DashboardScreen(String username, java.util.function.Consumer<PostData> onOpenPost,
+                           String activeView) {
+        this.loggedInUser = username;
+        this.onOpenPost = onOpenPost;
+        this.activeView = activeView;
         buildUI();
     }
 
@@ -114,6 +125,8 @@ public class DashboardScreen extends JFrame {
 
         JButton browseBtn = makeSmallButton("Browse", BG_CARD, NEON_CYAN, BORDER_COL);
         browseBtn.addActionListener(e -> showBrowseCommunitiesDialog());
+        JButton chatBtn = makeSmallButton("Chat", BG_CARD, NEON_CYAN, BORDER_COL);
+        chatBtn.addActionListener(e -> ChatWindow.showChat());
         JButton adminBtn = makeSmallButton("Admin", BG_CARD, GOLD, BORDER_COL);
         adminBtn.addActionListener(e -> showAdminDialog());
         JButton themeBtn = makeSmallButton(LIGHT_MODE ? "Dark" : "Light", BG_PANEL, NEON_PINK, BORDER_COL);
@@ -154,6 +167,7 @@ public class DashboardScreen extends JFrame {
         actions.add(newCommunityBtn);
         actions.add(newPostBtn);
         actions.add(browseBtn);
+        actions.add(chatBtn);
         if (Session.isAdmin()) {
             actions.add(adminBtn);
         }
@@ -182,7 +196,7 @@ public class DashboardScreen extends JFrame {
         }
 
         JDialog dialog = new JDialog(this, "Clixky Profile", true);
-        dialog.setSize(390, 430);
+        dialog.setSize(430, 620);
         dialog.setLocationRelativeTo(this);
         dialog.setResizable(false);
         dialog.setUndecorated(true);
@@ -238,7 +252,9 @@ public class DashboardScreen extends JFrame {
         card.add(profileRow("PHONE", nullToFallback(profile.getPhoneNo(), "Not set")));
         card.add(profileRow("BIRTH YEAR", String.valueOf(profile.getBirthYear())));
         card.add(profileRow("PRIVACY", profile.isPrivate() ? "Private" : "Public"));
-        card.add(Box.createVerticalStrut(18));
+        card.add(Box.createVerticalStrut(12));
+        card.add(new FollowingPanel(profile.getUserId()));
+        card.add(Box.createVerticalStrut(12));
 
         JButton edit = makeButton("EDIT PROFILE", BG_CARD, NEON_PINK, BORDER_COL);
         edit.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
@@ -331,7 +347,20 @@ public class DashboardScreen extends JFrame {
         sidebarList.setLayout(new BoxLayout(sidebarList, BoxLayout.Y_AXIS));
         sidebarList.setOpaque(false);
 
-        sidebarList.add(makeSidebarItem("Home Feed", selectedCommunityId == null, NEON_CYAN, null, null));
+        sidebarList.add(makeSidebarItem("Home Feed", "feed".equals(activeView) && selectedCommunityId == null, NEON_CYAN, null, null));
+        sidebar.add(sidebarList);
+
+        sidebar.add(Box.createVerticalStrut(14));
+        sidebar.add(sidebarSection("MY ACTIVITY"));
+        JPanel activityList = new JPanel();
+        activityList.setLayout(new BoxLayout(activityList, BoxLayout.Y_AXIS));
+        activityList.setOpaque(false);
+        activityList.add(makeSidebarAction("Saved Posts", "saved".equals(activeView), NEON_CYAN, "saved"));
+        activityList.add(makeSidebarAction("Liked Posts", "liked".equals(activeView), NEON_CYAN, "liked"));
+        activityList.add(makeSidebarAction("My Comments", "comments".equals(activeView), NEON_CYAN, "comments"));
+        activityList.add(makeSidebarAction("My Reports", "reports".equals(activeView), NEON_CYAN, "reports"));
+        activityList.add(makeSidebarAction("Joined Communities", "joined".equals(activeView), NEON_CYAN, "joined"));
+        sidebar.add(activityList);
 
         java.util.List<CommunityDAO.CommunitySummary> communities =
                 new CommunityDAO().getCommunitySummaries(Session.getCurrentUserId());
@@ -356,7 +385,6 @@ public class DashboardScreen extends JFrame {
         if (!hasJoined) {
             sidebarList.add(sidebarHint("No joined communities yet."));
         }
-        sidebar.add(sidebarList);
 
         JPanel suggestedList = new JPanel();
         suggestedList.setLayout(new BoxLayout(suggestedList, BoxLayout.Y_AXIS));
@@ -472,9 +500,31 @@ public class DashboardScreen extends JFrame {
         return item;
     }
 
+    private JPanel makeSidebarAction(String name, boolean active, Color dotColor, String view) {
+        JPanel item = makeSidebarItem(name, active, dotColor, null, null);
+        MouseAdapter openView = new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                SoundFX.click();
+                dispose();
+                new DashboardScreen(loggedInUser, onOpenPost, view);
+            }
+        };
+        for (MouseListener listener : item.getMouseListeners()) {
+            item.removeMouseListener(listener);
+        }
+        item.addMouseListener(openView);
+        for (Component child : item.getComponents()) {
+            for (MouseListener listener : child.getMouseListeners()) {
+                child.removeMouseListener(listener);
+            }
+            child.addMouseListener(openView);
+        }
+        return item;
+    }
+
     private String getSearchText(JTextField search) {
         String text = search.getText().trim();
-        if (search.getForeground().equals(NEON_DIM)) {
+        if (isPlaceholderText(search)) {
             return "";
         }
         return text;
@@ -506,9 +556,16 @@ public class DashboardScreen extends JFrame {
 
         feedPanel.removeAll();
 
-        JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        if (!"feed".equals(activeView)) {
+            refreshActivityView();
+            feedPanel.revalidate();
+            feedPanel.repaint();
+            return;
+        }
+
+        JPanel header = new JPanel(new BorderLayout(12, 0));
         header.setOpaque(false);
-        header.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        header.setMaximumSize(new Dimension(Integer.MAX_VALUE, 46));
         JLabel feedTitle = new JLabel("Home Feed");
         if (selectedCommunityName != null) {
             feedTitle.setText("r/" + selectedCommunityName);
@@ -518,7 +575,10 @@ public class DashboardScreen extends JFrame {
         }
         feedTitle.setFont(new Font("Segoe UI", Font.BOLD, 18));
         feedTitle.setForeground(TEXT_MAIN);
-        header.add(feedTitle);
+        header.add(feedTitle, BorderLayout.WEST);
+        if (selectedCommunityId != null && searchQuery.isBlank()) {
+            header.add(buildCommunityMembershipHeader(), BorderLayout.EAST);
+        }
         feedPanel.add(header);
         feedPanel.add(Box.createVerticalStrut(8));
 
@@ -540,9 +600,9 @@ public class DashboardScreen extends JFrame {
         List<PostData> posts = loadFeedPosts();
         if (!posts.isEmpty()) {
             JLabel postHeader = new JLabel(searchQuery.isBlank() ? "Posts" : "Matching Posts");
-            postHeader.setFont(new Font("Segoe UI", Font.BOLD, 14));
+            postHeader.setFont(new Font("Segoe UI", Font.BOLD, 20));
             postHeader.setForeground(NEON_PINK);
-            postHeader.setBorder(new EmptyBorder(6, 0, 6, 0));
+            postHeader.setBorder(new EmptyBorder(10, 0, 10, 0));
             feedPanel.add(postHeader);
         }
 
@@ -561,6 +621,251 @@ public class DashboardScreen extends JFrame {
 
         feedPanel.revalidate();
         feedPanel.repaint();
+    }
+
+    private JPanel buildCommunityMembershipHeader() {
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        actions.setOpaque(false);
+
+        CommunityDAO.CommunitySummary community = getSelectedCommunitySummary();
+        if (community == null) {
+            return actions;
+        }
+
+        JLabel stats = new JLabel(community.getMemberCount() + " members  |  " + community.getPostCount() + " posts");
+        stats.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        stats.setForeground(NEON_DIM);
+
+        JButton membership = makeSmallButton(
+                community.isJoined() ? "Joined" : "Join",
+                community.isJoined() ? BG_DEEP : BG_CARD,
+                community.isJoined() ? NEON_PINK : NEON_CYAN,
+                BORDER_COL
+        );
+        membership.setToolTipText(community.isJoined() ? "Leave this community" : "Join this community");
+        membership.addActionListener(e -> toggleSelectedCommunityMembership(community));
+
+        actions.add(stats);
+        actions.add(membership);
+        return actions;
+    }
+
+    private CommunityDAO.CommunitySummary getSelectedCommunitySummary() {
+        if (selectedCommunityId == null || !Session.isLoggedIn()) {
+            return null;
+        }
+
+        for (CommunityDAO.CommunitySummary community :
+                new CommunityDAO().getCommunitySummaries(Session.getCurrentUserId())) {
+            if (community.getCommunityId() == selectedCommunityId) {
+                return community;
+            }
+        }
+
+        return null;
+    }
+
+    private void toggleSelectedCommunityMembership(CommunityDAO.CommunitySummary community) {
+        CommunityDAO dao = new CommunityDAO();
+        boolean ok = community.isJoined()
+                ? dao.leaveCommunity(Session.getCurrentUserId(), community.getCommunityId())
+                : dao.joinCommunity(Session.getCurrentUserId(), community.getCommunityId());
+
+        if (!ok) {
+            SoundFX.error();
+            showCyberError(this, "Update Failed", "Community membership could not be updated.");
+            return;
+        }
+
+        SoundFX.success();
+        dispose();
+        new DashboardScreen(loggedInUser, onOpenPost, community.getCommunityId(), community.getCommunityName());
+    }
+
+    private void refreshActivityView() {
+        addFeedTitle(activityTitle());
+
+        switch (activeView) {
+            case "saved" -> addPostList(toPostData(new PostDAO().getSavedPosts(Session.getCurrentUserId())), "No saved posts yet.");
+            case "liked" -> addPostList(toPostData(new PostDAO().getLikedPosts(Session.getCurrentUserId())), "No liked posts yet.");
+            case "comments" -> addUserComments();
+            case "reports" -> addUserReports();
+            case "joined" -> addJoinedCommunities();
+            default -> addPostList(toPostData(new PostDAO().getFeedPosts()), "No posts found.");
+        }
+    }
+
+    private void addFeedTitle(String title) {
+        JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        header.setOpaque(false);
+        header.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        JLabel label = new JLabel(searchQuery.isBlank() ? title : title + " - Search: " + searchQuery);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        label.setForeground(TEXT_MAIN);
+        header.add(label);
+        feedPanel.add(header);
+        feedPanel.add(Box.createVerticalStrut(8));
+    }
+
+    private String activityTitle() {
+        return switch (activeView) {
+            case "saved" -> "Saved Posts";
+            case "liked" -> "Liked Posts";
+            case "comments" -> "My Comments";
+            case "reports" -> "My Reports";
+            case "joined" -> "Joined Communities";
+            default -> "Home Feed";
+        };
+    }
+
+    private void addPostList(List<PostData> posts, String emptyText) {
+        int shown = 0;
+        for (PostData post : posts) {
+            if (!matchesSearch(post)) {
+                continue;
+            }
+            feedPanel.add(buildPostCard(post));
+            feedPanel.add(Box.createVerticalStrut(8));
+            shown++;
+        }
+
+        if (shown == 0) {
+            addEmptyLabel(searchQuery.isBlank() ? emptyText : "No matching posts found.");
+        }
+    }
+
+    private void addUserComments() {
+        int shown = 0;
+        for (CommentDAO.UserCommentRow comment : new CommentDAO().getCommentsByUser(Session.getCurrentUserId())) {
+            String title = "On: " + comment.getPostTitle();
+            String detail = "r/" + comment.getCommunity() + "  |  " + comment.getCommentedAt()
+                    + "  |  score " + comment.getScore();
+            if (!matchesTextSearch(title, detail, comment.getBody())) {
+                continue;
+            }
+
+            feedPanel.add(buildInfoCard(title, comment.getBody(), detail, "View Post", () -> openPostById(comment.getPostId())));
+            feedPanel.add(Box.createVerticalStrut(8));
+            shown++;
+        }
+        if (shown == 0) {
+            addEmptyLabel(searchQuery.isBlank() ? "No comments yet." : "No matching comments found.");
+        }
+    }
+
+    private void addUserReports() {
+        int shown = 0;
+        for (ReportDAO.AdminReportRow report : new ReportDAO().getReportsByUser(Session.getCurrentUserId())) {
+            String title = report.getTargetType() + " report  [" + report.getStatus() + "]";
+            String detail = "reason: " + report.getReason() + "  |  " + report.getCreatedAt()
+                    + "  |  target " + report.getTargetId();
+            String body = nullToFallback(report.getTargetTitle(), "Target no longer exists");
+            if (report.getDetails() != null && !report.getDetails().isBlank()) {
+                body += " - " + report.getDetails();
+            }
+            if (!matchesTextSearch(title, detail, body)) {
+                continue;
+            }
+
+            feedPanel.add(buildInfoCard(title, body, detail, null, null));
+            feedPanel.add(Box.createVerticalStrut(8));
+            shown++;
+        }
+        if (shown == 0) {
+            addEmptyLabel(searchQuery.isBlank() ? "No reports submitted yet." : "No matching reports found.");
+        }
+    }
+
+    private void addJoinedCommunities() {
+        int shown = 0;
+        for (CommunityDAO.CommunitySummary community :
+                new CommunityDAO().getCommunitySummaries(Session.getCurrentUserId())) {
+            if (!community.isJoined()) {
+                continue;
+            }
+            String detail = community.getMemberCount() + " members  |  " + community.getPostCount()
+                    + " posts  |  Created " + community.getCreatedAt();
+            String description = nullToFallback(community.getDescription(), "No description.");
+            if (!matchesTextSearch(community.getCommunityName(), detail, description)) {
+                continue;
+            }
+
+            feedPanel.add(buildInfoCard("r/" + community.getCommunityName(), description, detail,
+                    "Open", () -> openCommunity(community)));
+            feedPanel.add(Box.createVerticalStrut(8));
+            shown++;
+        }
+        if (shown == 0) {
+            addEmptyLabel(searchQuery.isBlank() ? "No joined communities yet." : "No matching communities found.");
+        }
+    }
+
+    private JPanel buildInfoCard(String title, String body, String detail, String actionText, Runnable action) {
+        JPanel card = new JPanel(new BorderLayout(14, 0));
+        card.setBackground(BG_PANEL);
+        card.setBorder(new CompoundBorder(
+                BorderFactory.createLineBorder(BORDER_COL, 1),
+                new EmptyBorder(14, 16, 14, 16)
+        ));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 112));
+
+        JPanel text = new JPanel();
+        text.setOpaque(false);
+        text.setLayout(new BoxLayout(text, BoxLayout.Y_AXIS));
+
+        JLabel titleLabel = new JLabel("<html><body style='width:620px; font-family:Segoe UI; font-size:14px; font-weight:bold; color:"
+                + htmlColor(TEXT_MAIN) + "'>" + escapeHtml(title) + "</body></html>");
+        JLabel bodyLabel = new JLabel("<html><body style='width:640px; font-family:Segoe UI; font-size:12px; color:"
+                + htmlColor(TEXT_MUTED) + "'>" + escapeHtml(body) + "</body></html>");
+        JLabel detailLabel = new JLabel(detail);
+        detailLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        detailLabel.setForeground(NEON_DIM);
+
+        text.add(titleLabel);
+        text.add(Box.createVerticalStrut(6));
+        text.add(bodyLabel);
+        text.add(Box.createVerticalStrut(6));
+        text.add(detailLabel);
+        card.add(text, BorderLayout.CENTER);
+
+        if (actionText != null && action != null) {
+            JButton actionButton = makeSmallButton(actionText, BG_CARD, NEON_CYAN, BORDER_COL);
+            actionButton.addActionListener(e -> action.run());
+            card.add(actionButton, BorderLayout.EAST);
+        }
+
+        return card;
+    }
+
+    private void addEmptyLabel(String text) {
+        JLabel empty = new JLabel(text);
+        empty.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+        empty.setForeground(TEXT_MUTED);
+        empty.setBorder(new EmptyBorder(24, 12, 24, 12));
+        feedPanel.add(empty);
+    }
+
+    private boolean matchesTextSearch(String... values) {
+        if (searchQuery.isBlank()) {
+            return true;
+        }
+        String q = searchQuery.toLowerCase();
+        for (String value : values) {
+            if (value != null && value.toLowerCase().contains(q)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void openPostById(int postId) {
+        for (PostData post : loadFeedPosts()) {
+            if (post.id == postId) {
+                openPost(post);
+                return;
+            }
+        }
+        showCyberError(this, "Post Not Found", "This post could not be opened.");
     }
 
     private String emptyFeedText() {
@@ -1252,7 +1557,7 @@ public class DashboardScreen extends JFrame {
         heading.setFont(new Font("Segoe UI", Font.BOLD, 22));
         heading.setForeground(GOLD);
 
-        JLabel subheading = new JLabel("Manage users, communities, and posts. Deletes cascade through the database rules.");
+        JLabel subheading = new JLabel("Admin-wide management for users, communities, posts, reports, likes, and comments.");
         subheading.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         subheading.setForeground(TEXT_MUTED);
 
@@ -1264,7 +1569,7 @@ public class DashboardScreen extends JFrame {
         header.add(subheading);
         header.add(Box.createVerticalStrut(14));
 
-        JTextField adminSearch = makeTextField("Search users, communities, posts...");
+        JTextField adminSearch = makeTextField("Search admin records...");
         adminSearch.setMaximumSize(new Dimension(360, 34));
         adminSearch.setPreferredSize(new Dimension(320, 34));
         adminSearch.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -1307,6 +1612,8 @@ public class DashboardScreen extends JFrame {
         tabs.addTab("Communities", buildAdminCommunitiesPanel(dialog, query));
         tabs.addTab("Posts", buildAdminPostsPanel(dialog, query));
         tabs.addTab("Reports", buildAdminReportsPanel(query));
+        tabs.addTab("Likes", buildAdminLikesPanel(query));
+        tabs.addTab("Comments", buildAdminCommentsPanel(query));
     }
 
     private JScrollPane buildAdminUsersPanel(JDialog dialog, String query) {
@@ -1446,6 +1753,47 @@ public class DashboardScreen extends JFrame {
         return adminScroll(list);
     }
 
+    private JScrollPane buildAdminLikesPanel(String query) {
+        JPanel list = adminListPanel();
+        int shown = 0;
+        for (PostDAO.AdminLikeRow like : new PostDAO().getAdminLikeRows()) {
+            String label = like.getVoteType() == 1 ? "Upvote" : "Downvote";
+            String title = label + " by u/" + like.getVoter();
+            String detail = "\"" + like.getPostTitle() + "\"  |  by u/" + like.getAuthor()
+                    + "  |  r/" + like.getCommunity() + "  |  post " + like.getPostId();
+            if (!matchesAdminSearch(query, title, detail)) {
+                continue;
+            }
+
+            list.add(adminInfoRow(title, detail));
+            list.add(Box.createVerticalStrut(10));
+            shown++;
+        }
+        addEmptyAdminHint(list, shown, "No likes match your search.");
+        return adminScroll(list);
+    }
+
+    private JScrollPane buildAdminCommentsPanel(String query) {
+        JPanel list = adminListPanel();
+        int shown = 0;
+        for (CommentDAO.UserCommentRow comment : new CommentDAO().getAdminCommentRows()) {
+            String title = "Comment on \"" + comment.getPostTitle() + "\"";
+            String detail = comment.getBody() + "  |  r/" + comment.getCommunity()
+                    + "  |  " + comment.getCommentedAt()
+                    + "  |  score " + comment.getScore()
+                    + "  |  comment " + comment.getCommentId();
+            if (!matchesAdminSearch(query, title, detail)) {
+                continue;
+            }
+
+            list.add(adminInfoRow(title, detail));
+            list.add(Box.createVerticalStrut(10));
+            shown++;
+        }
+        addEmptyAdminHint(list, shown, "No comments match your search.");
+        return adminScroll(list);
+    }
+
     private boolean matchesAdminSearch(String query, String title, String detail) {
         if (query == null || query.isBlank()) {
             return true;
@@ -1561,7 +1909,7 @@ public class DashboardScreen extends JFrame {
     }
 
     private String getFieldText(JTextField field) {
-        return field.getForeground().equals(NEON_DIM) ? "" : field.getText().trim();
+        return isPlaceholderText(field) ? "" : field.getText().trim();
     }
 
     private String escapeHtml(String text) {
@@ -1624,10 +1972,12 @@ public class DashboardScreen extends JFrame {
     // ── Database feed ─────────────────────────────────────────────────────────
 
     private List<PostData> loadFeedPosts() {
-        List<PostData> list = new ArrayList<>();
-        PostDAO postDAO = new PostDAO();
+        return toPostData(new PostDAO().getFeedPosts(selectedCommunityId));
+    }
 
-        for (PostDAO.FeedPost post : postDAO.getFeedPosts(selectedCommunityId)) {
+    private List<PostData> toPostData(List<PostDAO.FeedPost> posts) {
+        List<PostData> list = new ArrayList<>();
+        for (PostDAO.FeedPost post : posts) {
             PostData postData = new PostData(
                     post.getPostId(),
                     post.getAuthorId(),
@@ -1644,7 +1994,6 @@ public class DashboardScreen extends JFrame {
                 list.add(postData);
             }
         }
-
         return list;
     }
 

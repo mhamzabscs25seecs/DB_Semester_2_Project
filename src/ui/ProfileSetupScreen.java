@@ -180,7 +180,7 @@ public class ProfileSetupScreen extends JFrame {
     }
 
     private String getFieldText(JTextField field) {
-        return field.getForeground().equals(NEON_DIM) ? "" : field.getText().trim();
+        return isPlaceholderText(field) ? "" : field.getText().trim();
     }
 
     private JComboBox<Integer> makeBirthYearBox() {

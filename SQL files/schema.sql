@@ -171,3 +171,33 @@ FOREIGN KEY (reported_by) REFERENCES Users(user_id) ON DELETE CASCADE
 
 CREATE INDEX idx_reports_target ON Reports(target_type, target_id);
 CREATE INDEX idx_reports_status ON Reports(status);
+
+CREATE TABLE Messages (
+message_id INTEGER PRIMARY KEY AUTOINCREMENT,
+sender_id INTEGER NOT NULL,
+recipient_id INTEGER NOT NULL,
+message_body TEXT NOT NULL CHECK(LENGTH(TRIM(message_body)) > 0 AND LENGTH(message_body) <= 1000),
+sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+read_at DATETIME,
+
+FOREIGN KEY (sender_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+FOREIGN KEY (recipient_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+CHECK(sender_id <> recipient_id)
+);
+
+CREATE INDEX idx_messages_conversation ON Messages(sender_id, recipient_id, sent_at);
+CREATE INDEX idx_messages_recipient_read ON Messages(recipient_id, read_at);
+
+CREATE TABLE User_Follows (
+follower_id INTEGER NOT NULL,
+followed_id INTEGER NOT NULL,
+followed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+PRIMARY KEY (follower_id, followed_id),
+
+FOREIGN KEY (follower_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+FOREIGN KEY (followed_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+CHECK(follower_id <> followed_id)
+);
+
+CREATE INDEX idx_user_follows_followed ON User_Follows(followed_id, followed_at);

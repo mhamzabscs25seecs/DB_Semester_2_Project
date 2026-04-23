@@ -95,13 +95,37 @@ public class PostDAO {
         public int getCommentCount() { return commentCount; }
     }
 
+    public static class AdminLikeRow {
+        private final String voter;
+        private final int postId;
+        private final String postTitle;
+        private final String author;
+        private final String community;
+        private final int voteType;
+
+        public AdminLikeRow(String voter, int postId, String postTitle, String author,
+                            String community, int voteType) {
+            this.voter = voter;
+            this.postId = postId;
+            this.postTitle = postTitle;
+            this.author = author;
+            this.community = community;
+            this.voteType = voteType;
+        }
+
+        public String getVoter() { return voter; }
+        public int getPostId() { return postId; }
+        public String getPostTitle() { return postTitle; }
+        public String getAuthor() { return author; }
+        public String getCommunity() { return community; }
+        public int getVoteType() { return voteType; }
+    }
+
     public List<FeedPost> getFeedPosts() {
         return getFeedPosts(null);
     }
 
     public List<FeedPost> getFeedPosts(Integer communityId) {
-        List<FeedPost> posts = new ArrayList<>();
-
         String sql = """
                 SELECT
                     p.post_id,
@@ -131,9 +155,7 @@ public class PostDAO {
                 ORDER BY p.created_at DESC
                 """;
 
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
+        return loadPosts(sql, stmt -> {
             if (communityId == null) {
                 stmt.setNull(1, java.sql.Types.INTEGER);
                 stmt.setNull(2, java.sql.Types.INTEGER);
@@ -141,6 +163,69 @@ public class PostDAO {
                 stmt.setInt(1, communityId);
                 stmt.setInt(2, communityId);
             }
+        }, "Feed posts");
+    }
+
+    public List<FeedPost> getSavedPosts(int userId) {
+        String sql = basePostSelect() + """
+                JOIN Saved_Posts sp ON p.post_id = sp.post_id
+                WHERE sp.user_id = ?
+                ORDER BY sp.saved_at DESC
+                """;
+
+        return loadPosts(sql, stmt -> stmt.setInt(1, userId), "Saved posts");
+    }
+
+    public List<FeedPost> getLikedPosts(int userId) {
+        String sql = basePostSelect() + """
+                JOIN Post_Votes pv ON p.post_id = pv.post_id
+                WHERE pv.user_id = ? AND pv.vote_type = 1
+                ORDER BY p.created_at DESC
+                """;
+
+        return loadPosts(sql, stmt -> stmt.setInt(1, userId), "Liked posts");
+    }
+
+    private String basePostSelect() {
+        return """
+                SELECT
+                    p.post_id,
+                    p.posted_by,
+                    p.community_id,
+                    p.title,
+                    p.body,
+                    u.username,
+                    c.community_name,
+                    p.created_at,
+                    COALESCE(v.score, 0) AS score,
+                    COALESCE(cc.comment_count, 0) AS comment_count
+                FROM Posts p
+                JOIN Users u ON p.posted_by = u.user_id
+                JOIN Communities c ON p.community_id = c.community_id
+                LEFT JOIN (
+                    SELECT post_id, SUM(vote_type) AS score
+                    FROM Post_Votes
+                    GROUP BY post_id
+                ) v ON p.post_id = v.post_id
+                LEFT JOIN (
+                    SELECT post_id, COUNT(*) AS comment_count
+                    FROM Comments
+                    GROUP BY post_id
+                ) cc ON p.post_id = cc.post_id
+                """;
+    }
+
+    private interface StatementBinder {
+        void bind(PreparedStatement stmt) throws SQLException;
+    }
+
+    private List<FeedPost> loadPosts(String sql, StatementBinder binder, String label) {
+        List<FeedPost> posts = new ArrayList<>();
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            binder.bind(stmt);
 
             try (ResultSet rs = stmt.executeQuery()) {
 
@@ -161,7 +246,7 @@ public class PostDAO {
             }
 
         } catch (SQLException e) {
-            System.out.println("Feed posts database error: " + e.getMessage());
+            System.out.println(label + " database error: " + e.getMessage());
         }
 
         return posts;
@@ -293,5 +378,43 @@ public class PostDAO {
         }
 
         return false;
+    }
+
+    public List<AdminLikeRow> getAdminLikeRows() {
+        List<AdminLikeRow> likes = new ArrayList<>();
+        String sql = """
+                SELECT
+                    voter.username AS voter,
+                    p.post_id,
+                    p.title,
+                    author.username AS author,
+                    c.community_name,
+                    pv.vote_type
+                FROM Post_Votes pv
+                JOIN Users voter ON pv.user_id = voter.user_id
+                JOIN Posts p ON pv.post_id = p.post_id
+                JOIN Users author ON p.posted_by = author.user_id
+                JOIN Communities c ON p.community_id = c.community_id
+                ORDER BY p.created_at DESC, voter.username ASC
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                likes.add(new AdminLikeRow(
+                        rs.getString("voter"),
+                        rs.getInt("post_id"),
+                        rs.getString("title"),
+                        rs.getString("author"),
+                        rs.getString("community_name"),
+                        rs.getInt("vote_type")
+                ));
+            }
+        } catch (SQLException e) {
+            System.out.println("Admin likes database error: " + e.getMessage());
+        }
+
+        return likes;
     }
 }
