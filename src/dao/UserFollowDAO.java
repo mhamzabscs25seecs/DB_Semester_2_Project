@@ -177,6 +177,60 @@ public class UserFollowDAO {
         return users;
     }
 
+    public List<FollowedUser> getFollowerUsers(int userId, String query) {
+        List<FollowedUser> users = new ArrayList<>();
+        String normalizedQuery = query == null ? "" : query.trim();
+        String likeQuery = "%" + normalizedQuery + "%";
+
+        String sql = """
+                SELECT
+                    u.user_id,
+                    u.username,
+                    up.display_name,
+                    up.bio_text,
+                    uf.followed_at
+                FROM User_Follows uf
+                JOIN Users u ON uf.follower_id = u.user_id
+                LEFT JOIN User_Profiles up ON u.user_id = up.user_id
+                WHERE uf.followed_id = ?
+                  AND (
+                        ? = ''
+                        OR u.username LIKE ?
+                        OR COALESCE(up.display_name, '') LIKE ?
+                        OR COALESCE(up.bio_text, '') LIKE ?
+                  )
+                ORDER BY uf.followed_at DESC, u.username ASC
+                LIMIT 50
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, userId);
+            stmt.setString(2, normalizedQuery);
+            stmt.setString(3, likeQuery);
+            stmt.setString(4, likeQuery);
+            stmt.setString(5, likeQuery);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    users.add(new FollowedUser(
+                            rs.getInt("user_id"),
+                            rs.getString("username"),
+                            rs.getString("display_name"),
+                            rs.getString("bio_text"),
+                            rs.getString("followed_at")
+                    ));
+                }
+            }
+
+        } catch (SQLException e) {
+            System.out.println("Follower users database error: " + e.getMessage());
+        }
+
+        return users;
+    }
+
     private int count(String sql, int userId) {
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {

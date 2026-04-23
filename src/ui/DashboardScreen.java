@@ -197,7 +197,7 @@ public class DashboardScreen extends JFrame {
         }
 
         JDialog dialog = new JDialog(this, "Clixky Profile", true);
-        dialog.setSize(430, 620);
+        dialog.setSize(430, 540);
         dialog.setLocationRelativeTo(this);
         dialog.setResizable(false);
         dialog.setUndecorated(true);
@@ -254,7 +254,7 @@ public class DashboardScreen extends JFrame {
         card.add(profileRow("BIRTH YEAR", String.valueOf(profile.getBirthYear())));
         card.add(profileRow("PRIVACY", profile.isPrivate() ? "Private" : "Public"));
         card.add(Box.createVerticalStrut(12));
-        card.add(new FollowingPanel(profile.getUserId()));
+        card.add(new FollowingPanel(profile.getUserId(), profile.isPrivate()));
         card.add(Box.createVerticalStrut(12));
 
         JButton edit = makeButton("EDIT PROFILE", BG_CARD, NEON_PINK, BORDER_COL);
@@ -418,7 +418,39 @@ public class DashboardScreen extends JFrame {
         }
 
         sidebar.add(Box.createVerticalGlue());
+        sidebar.add(buildLogoutButton());
         return sidebar;
+    }
+
+    private JPanel buildLogoutButton() {
+        JPanel row = new JPanel(new BorderLayout());
+        row.setOpaque(false);
+        row.setBorder(new EmptyBorder(10, 18, 0, 18));
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 46));
+
+        JButton logout = makeSmallButton("Logout", BG_CARD, NEON_PINK, BORDER_COL);
+        logout.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        logout.addActionListener(e -> handleLogout());
+
+        row.add(logout, BorderLayout.CENTER);
+        return row;
+    }
+
+    private void handleLogout() {
+        boolean confirmed = showCyberConfirm(
+                this,
+                "Log Out",
+                "Do you want to log out?",
+                "LOG OUT"
+        );
+        if (!confirmed) {
+            return;
+        }
+
+        SoundFX.success();
+        dispose();
+        Session.logout();
+        Main.showLogin();
     }
 
     private JLabel sidebarHint(String text) {
@@ -660,6 +692,12 @@ public class DashboardScreen extends JFrame {
         actions.add(stats);
         actions.add(membership);
         actions.add(block);
+        if (Session.isAdmin()) {
+            JButton delete = makeSmallButton("Delete", BG_CARD, GOLD, BORDER_COL);
+            delete.setToolTipText("Admin delete this community");
+            delete.addActionListener(e -> deleteSelectedCommunityByAdmin(community));
+            actions.add(delete);
+        }
         return actions;
     }
 
@@ -711,6 +749,32 @@ public class DashboardScreen extends JFrame {
         SoundFX.success();
         dispose();
         new DashboardScreen(loggedInUser, onOpenPost, community.getCommunityId(), community.getCommunityName());
+    }
+
+    private void deleteSelectedCommunityByAdmin(CommunityDAO.CommunitySummary community) {
+        boolean confirmed = showCyberConfirm(
+                this,
+                "Delete Community",
+                "Delete r/" + community.getCommunityName() + " and all posts/comments inside it?",
+                "DELETE"
+        );
+        if (!confirmed) {
+            return;
+        }
+
+        boolean deleted = new CommunityDAO().deleteCommunityByAdmin(
+                Session.getCurrentUserId(),
+                community.getCommunityId()
+        );
+        if (!deleted) {
+            SoundFX.error();
+            showCyberError(this, "Delete Failed", "Community could not be deleted.");
+            return;
+        }
+
+        SoundFX.success();
+        dispose();
+        new DashboardScreen(loggedInUser, onOpenPost);
     }
 
     private void refreshActivityView() {

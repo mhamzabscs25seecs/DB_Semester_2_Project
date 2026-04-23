@@ -426,7 +426,7 @@ public class PostViewScreen extends JFrame {
         }
 
         JDialog dialog = new JDialog(this, "Clixky Profile", true);
-        dialog.setSize(430, 640);
+        dialog.setSize(430, 560);
         dialog.setLocationRelativeTo(this);
         dialog.setResizable(false);
         dialog.setUndecorated(true);
@@ -479,11 +479,15 @@ public class PostViewScreen extends JFrame {
         card.add(profileRow("BIRTH YEAR", String.valueOf(profile.getBirthYear())));
         card.add(profileRow("PRIVACY", profile.isPrivate() ? "Private" : "Public"));
         card.add(Box.createVerticalStrut(12));
-        card.add(new FollowingPanel(profile.getUserId()));
+        card.add(new FollowingPanel(profile.getUserId(), profile.isPrivate()));
         card.add(Box.createVerticalStrut(12));
         card.add(buildFollowAction(profile));
         card.add(Box.createVerticalStrut(8));
         card.add(buildBlockAction(profile));
+        if (Session.isAdmin() && profile.getUserId() != Session.getCurrentUserId()) {
+            card.add(Box.createVerticalStrut(8));
+            card.add(buildAdminDeleteUserAction(profile, dialog));
+        }
         card.add(Box.createVerticalStrut(8));
         card.add(close);
 
@@ -552,6 +556,37 @@ public class PostViewScreen extends JFrame {
         });
 
         return block;
+    }
+
+    private JButton buildAdminDeleteUserAction(UserDAO.UserProfile profile, JDialog dialog) {
+        JButton delete = makeButton("ADMIN DELETE USER", BG_CARD, GOLD, BORDER_COL);
+        delete.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        delete.addActionListener(e -> {
+            boolean confirmed = showCyberConfirm(
+                    this,
+                    "Delete User",
+                    "Delete @" + profile.getUsername() + " and all related content?",
+                    "DELETE"
+            );
+            if (!confirmed) {
+                return;
+            }
+
+            boolean deleted = new UserDAO().deleteUserByAdmin(Session.getCurrentUserId(), profile.getUserId());
+            if (!deleted) {
+                SoundFX.error();
+                JOptionPane.showMessageDialog(this, "User could not be deleted.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            SoundFX.success();
+            dialog.dispose();
+            dispose();
+            if (onBack != null) {
+                onBack.run();
+            }
+        });
+        return delete;
     }
 
     private JPanel profileRow(String label, String value) {
