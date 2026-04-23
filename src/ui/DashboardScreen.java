@@ -7,6 +7,7 @@ import dao.VoteDAO;
 import dao.CommunityDAO;
 import dao.CommentDAO;
 import dao.ReportDAO;
+import dao.BlockDAO;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -360,6 +361,8 @@ public class DashboardScreen extends JFrame {
         activityList.add(makeSidebarAction("My Comments", "comments".equals(activeView), NEON_CYAN, "comments"));
         activityList.add(makeSidebarAction("My Reports", "reports".equals(activeView), NEON_CYAN, "reports"));
         activityList.add(makeSidebarAction("Joined Communities", "joined".equals(activeView), NEON_CYAN, "joined"));
+        activityList.add(makeSidebarAction("Blocked Users", "blockedUsers".equals(activeView), NEON_PINK, "blockedUsers"));
+        activityList.add(makeSidebarAction("Blocked Communities", "blockedCommunities".equals(activeView), NEON_PINK, "blockedCommunities"));
         sidebar.add(activityList);
 
         java.util.List<CommunityDAO.CommunitySummary> communities =
@@ -644,9 +647,19 @@ public class DashboardScreen extends JFrame {
         );
         membership.setToolTipText(community.isJoined() ? "Leave this community" : "Join this community");
         membership.addActionListener(e -> toggleSelectedCommunityMembership(community));
+        boolean blocked = new BlockDAO().isCommunityBlocked(Session.getCurrentUserId(), community.getCommunityId());
+        JButton block = makeSmallButton(
+                blocked ? "Unblock" : "Block",
+                BG_DEEP,
+                blocked ? TEXT_MUTED : NEON_PINK,
+                BORDER_COL
+        );
+        block.setToolTipText(blocked ? "Unblock this community" : "Block this community");
+        block.addActionListener(e -> toggleSelectedCommunityBlock(community));
 
         actions.add(stats);
         actions.add(membership);
+        actions.add(block);
         return actions;
     }
 
@@ -682,6 +695,24 @@ public class DashboardScreen extends JFrame {
         new DashboardScreen(loggedInUser, onOpenPost, community.getCommunityId(), community.getCommunityName());
     }
 
+    private void toggleSelectedCommunityBlock(CommunityDAO.CommunitySummary community) {
+        BlockDAO blockDAO = new BlockDAO();
+        boolean blocked = blockDAO.isCommunityBlocked(Session.getCurrentUserId(), community.getCommunityId());
+        boolean ok = blocked
+                ? blockDAO.unblockCommunity(Session.getCurrentUserId(), community.getCommunityId())
+                : blockDAO.blockCommunity(Session.getCurrentUserId(), community.getCommunityId());
+
+        if (!ok) {
+            SoundFX.error();
+            showCyberError(this, "Block Failed", "Community block status could not be updated.");
+            return;
+        }
+
+        SoundFX.success();
+        dispose();
+        new DashboardScreen(loggedInUser, onOpenPost, community.getCommunityId(), community.getCommunityName());
+    }
+
     private void refreshActivityView() {
         addFeedTitle(activityTitle());
 
@@ -691,6 +722,8 @@ public class DashboardScreen extends JFrame {
             case "comments" -> addUserComments();
             case "reports" -> addUserReports();
             case "joined" -> addJoinedCommunities();
+            case "blockedUsers" -> addBlockedUsers();
+            case "blockedCommunities" -> addBlockedCommunities();
             default -> addPostList(toPostData(new PostDAO().getFeedPosts()), "No posts found.");
         }
     }
@@ -714,6 +747,8 @@ public class DashboardScreen extends JFrame {
             case "comments" -> "My Comments";
             case "reports" -> "My Reports";
             case "joined" -> "Joined Communities";
+            case "blockedUsers" -> "Blocked Users";
+            case "blockedCommunities" -> "Blocked Communities";
             default -> "Home Feed";
         };
     }
@@ -798,6 +833,69 @@ public class DashboardScreen extends JFrame {
         if (shown == 0) {
             addEmptyLabel(searchQuery.isBlank() ? "No joined communities yet." : "No matching communities found.");
         }
+    }
+
+    private void addBlockedUsers() {
+        int shown = 0;
+        for (BlockDAO.BlockedUserRow user : new BlockDAO().getBlockedUsers(Session.getCurrentUserId())) {
+            String display = nullToFallback(user.getDisplayName(), user.getUsername());
+            String detail = "@" + user.getUsername() + "  |  Blocked " + user.getBlockedAt();
+            if (!matchesTextSearch(display, detail)) {
+                continue;
+            }
+
+            feedPanel.add(buildInfoCard(display, "Messages from this user are blocked.", detail,
+                    "Unblock", () -> unblockUserFromActivity(user)));
+            feedPanel.add(Box.createVerticalStrut(8));
+            shown++;
+        }
+        if (shown == 0) {
+            addEmptyLabel(searchQuery.isBlank() ? "No blocked users." : "No matching blocked users found.");
+        }
+    }
+
+    private void addBlockedCommunities() {
+        int shown = 0;
+        for (BlockDAO.BlockedCommunityRow community : new BlockDAO().getBlockedCommunities(Session.getCurrentUserId())) {
+            String title = "r/" + community.getCommunityName();
+            String detail = "Blocked " + community.getBlockedAt();
+            String body = nullToFallback(community.getDescription(), "No description.");
+            if (!matchesTextSearch(title, detail, body)) {
+                continue;
+            }
+
+            feedPanel.add(buildInfoCard(title, body, detail,
+                    "Unblock", () -> unblockCommunityFromActivity(community)));
+            feedPanel.add(Box.createVerticalStrut(8));
+            shown++;
+        }
+        if (shown == 0) {
+            addEmptyLabel(searchQuery.isBlank() ? "No blocked communities." : "No matching blocked communities found.");
+        }
+    }
+
+    private void unblockUserFromActivity(BlockDAO.BlockedUserRow user) {
+        boolean ok = new BlockDAO().unblockUser(Session.getCurrentUserId(), user.getUserId());
+        if (!ok) {
+            SoundFX.error();
+            showCyberError(this, "Unblock Failed", "User could not be unblocked.");
+            return;
+        }
+
+        SoundFX.success();
+        refreshFeed();
+    }
+
+    private void unblockCommunityFromActivity(BlockDAO.BlockedCommunityRow community) {
+        boolean ok = new BlockDAO().unblockCommunity(Session.getCurrentUserId(), community.getCommunityId());
+        if (!ok) {
+            SoundFX.error();
+            showCyberError(this, "Unblock Failed", "Community could not be unblocked.");
+            return;
+        }
+
+        SoundFX.success();
+        refreshFeed();
     }
 
     private JPanel buildInfoCard(String title, String body, String detail, String actionText, Runnable action) {
@@ -1118,6 +1216,20 @@ public class DashboardScreen extends JFrame {
     }
 
     private void showCreatePostDialog() {
+        if (!Session.isLoggedIn()) {
+            SoundFX.error();
+            showCyberError(this, "Login Required", "Please log in first.");
+            return;
+        }
+
+        List<PostDAO.CommunityOption> joinedCommunities =
+                new PostDAO().getJoinedCommunities(Session.getCurrentUserId());
+        if (joinedCommunities.isEmpty()) {
+            SoundFX.error();
+            showCyberError(this, "Join a Community First", "You can only create posts in communities you have joined.");
+            return;
+        }
+
         JDialog dlg = new JDialog(this, "New Post", true);
         dlg.setSize(460, 420);
         dlg.setLocationRelativeTo(this);
@@ -1135,8 +1247,17 @@ public class DashboardScreen extends JFrame {
 
         JTextField titleField = makeTextField("Post title");
         JComboBox<PostDAO.CommunityOption> communityBox = new JComboBox<>();
-        for (PostDAO.CommunityOption community : new PostDAO().getCommunities()) {
+        for (PostDAO.CommunityOption community : joinedCommunities) {
             communityBox.addItem(community);
+        }
+        if (selectedCommunityId != null) {
+            for (int i = 0; i < communityBox.getItemCount(); i++) {
+                PostDAO.CommunityOption community = communityBox.getItemAt(i);
+                if (community.getCommunityId() == selectedCommunityId) {
+                    communityBox.setSelectedIndex(i);
+                    break;
+                }
+            }
         }
         communityBox.setBackground(BG_DEEP);
         communityBox.setForeground(TEXT_MAIN);
@@ -1166,11 +1287,6 @@ public class DashboardScreen extends JFrame {
             String body = bodyArea.getText().trim();
             PostDAO.CommunityOption community = (PostDAO.CommunityOption) communityBox.getSelectedItem();
 
-            if (!Session.isLoggedIn()) {
-                SoundFX.error();
-                JOptionPane.showMessageDialog(this, "Please log in first.", "Clixky", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
             if (title.isEmpty() || body.isEmpty() || community == null) {
                 SoundFX.error();
                 JOptionPane.showMessageDialog(this, "Please fill in title, community, and body.", "Clixky", JOptionPane.ERROR_MESSAGE);
@@ -1180,7 +1296,7 @@ public class DashboardScreen extends JFrame {
             int postId = new PostDAO().createPost(Session.getCurrentUserId(), community.getCommunityId(), title, body);
             if (postId == 0) {
                 SoundFX.error();
-                JOptionPane.showMessageDialog(this, "Post could not be created.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Post could not be created. Join the community first.", "Clixky", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
@@ -1495,6 +1611,28 @@ public class DashboardScreen extends JFrame {
         JButton report = makeSmallButton("Report", BG_DEEP, TEXT_MUTED, BORDER_COL);
         report.addActionListener(e -> reportCommunity(community));
 
+        boolean blocked = new BlockDAO().isCommunityBlocked(Session.getCurrentUserId(), community.getCommunityId());
+        JButton block = makeSmallButton(blocked ? "Unblock" : "Block",
+                BG_DEEP,
+                blocked ? TEXT_MUTED : NEON_PINK,
+                BORDER_COL);
+        block.addActionListener(e -> {
+            BlockDAO blockDAO = new BlockDAO();
+            boolean ok = blocked
+                    ? blockDAO.unblockCommunity(Session.getCurrentUserId(), community.getCommunityId())
+                    : blockDAO.blockCommunity(Session.getCurrentUserId(), community.getCommunityId());
+
+            if (!ok) {
+                SoundFX.error();
+                showCyberError(this, "Block Failed", "Community block status could not be updated.");
+                return;
+            }
+
+            SoundFX.success();
+            dialog.dispose();
+            showBrowseCommunitiesDialog();
+        });
+
         JPanel actions = new JPanel();
         actions.setOpaque(false);
         actions.setLayout(new BoxLayout(actions, BoxLayout.Y_AXIS));
@@ -1503,6 +1641,8 @@ public class DashboardScreen extends JFrame {
         actions.add(membership);
         actions.add(Box.createVerticalStrut(8));
         actions.add(report);
+        actions.add(Box.createVerticalStrut(8));
+        actions.add(block);
 
         card.add(text, BorderLayout.CENTER);
         card.add(actions, BorderLayout.EAST);

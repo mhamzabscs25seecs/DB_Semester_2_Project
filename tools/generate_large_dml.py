@@ -266,8 +266,12 @@ for rid in range(1, 61):
 
 sections = [
     "PRAGMA foreign_keys = ON;",
+    "PRAGMA temp_store = MEMORY;",
     "BEGIN TRANSACTION;",
     """DELETE FROM Comment_Votes;
+DELETE FROM Chat_Access_Requests;
+DELETE FROM User_Blocks;
+DELETE FROM Community_Blocks;
 DELETE FROM Reports;
 DELETE FROM Saved_Posts;
 DELETE FROM User_Follows;
@@ -282,7 +286,7 @@ DELETE FROM Users;""",
     """DELETE FROM sqlite_sequence
 WHERE name IN (
     'Users', 'Communities', 'Posts', 'Comments', 'Post_Votes',
-    'Comment_Votes', 'Reports', 'Messages'
+    'Comment_Votes', 'Reports', 'Messages', 'Chat_Access_Requests'
 );""",
     "-- Main users: hamza_db is admin; aayan_db, ali_db, and maryam_db are regular users.",
     insert("Users", ["user_id", "username", "email", "password_hash", "role", "created_at"], users),

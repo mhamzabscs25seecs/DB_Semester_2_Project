@@ -2,6 +2,7 @@ package ui;
 
 import dao.MessageDAO;
 import dao.Session;
+import dao.BlockDAO;
 import dao.UserFollowDAO;
 
 import javax.swing.*;
@@ -25,6 +26,11 @@ public class ChatWindow extends JFrame {
     private final JTextArea composer = new JTextArea(3, 30);
     private final JLabel conversationTitle = new JLabel("Select a conversation");
     private final JButton followButton = DashboardScreen.makeSmallButton("Follow", BG_CARD, NEON_PINK, BORDER_COL);
+    private final JButton requestButton = DashboardScreen.makeSmallButton("Request Chat", BG_CARD, NEON_CYAN, BORDER_COL);
+    private final JButton acceptButton = DashboardScreen.makeSmallButton("Accept", BG_CARD, NEON_CYAN, BORDER_COL);
+    private final JButton declineButton = DashboardScreen.makeSmallButton("Decline", BG_DEEP, TEXT_MUTED, BORDER_COL);
+    private final JButton blockButton = DashboardScreen.makeSmallButton("Block", BG_DEEP, NEON_PINK, BORDER_COL);
+    private final JLabel accessStatus = new JLabel(" ");
     private final JLabel listStatus = new JLabel(" ");
     private final JTextField searchField = makeTextField("Search users...");
     private MessageDAO.ChatUser selectedUser;
@@ -167,10 +173,32 @@ public class ChatWindow extends JFrame {
 
         conversationTitle.setFont(new Font("Segoe UI", Font.BOLD, 16));
         conversationTitle.setForeground(NEON_CYAN);
-        followButton.setVisible(false);
+        accessStatus.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        accessStatus.setForeground(TEXT_MUTED);
+
         followButton.addActionListener(e -> toggleSelectedFollow());
-        conversationHeader.add(conversationTitle, BorderLayout.WEST);
-        conversationHeader.add(followButton, BorderLayout.EAST);
+        requestButton.addActionListener(e -> requestChatAccess());
+        acceptButton.addActionListener(e -> respondToChatRequest(true));
+        declineButton.addActionListener(e -> respondToChatRequest(false));
+        blockButton.addActionListener(e -> toggleSelectedBlock());
+
+        JPanel titleStack = new JPanel();
+        titleStack.setOpaque(false);
+        titleStack.setLayout(new BoxLayout(titleStack, BoxLayout.Y_AXIS));
+        titleStack.add(conversationTitle);
+        titleStack.add(Box.createVerticalStrut(2));
+        titleStack.add(accessStatus);
+
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        actions.setOpaque(false);
+        actions.add(followButton);
+        actions.add(requestButton);
+        actions.add(acceptButton);
+        actions.add(declineButton);
+        actions.add(blockButton);
+
+        conversationHeader.add(titleStack, BorderLayout.WEST);
+        conversationHeader.add(actions, BorderLayout.EAST);
 
         messagesPanel.setLayout(new BoxLayout(messagesPanel, BoxLayout.Y_AXIS));
         messagesPanel.setBackground(BG_DEEP);
@@ -295,7 +323,9 @@ public class ChatWindow extends JFrame {
 
         if (selectedUser == null) {
             conversationTitle.setText("Select a conversation");
-            followButton.setVisible(false);
+            accessStatus.setText(" ");
+            setChatActionsVisible(false);
+            composer.setEnabled(false);
             messagesPanel.add(emptyLabel("Search a user or choose a conversation."));
             messagesPanel.revalidate();
             messagesPanel.repaint();
@@ -303,7 +333,7 @@ public class ChatWindow extends JFrame {
         }
 
         conversationTitle.setText("u/" + selectedUser.getUsername());
-        updateFollowButton();
+        updateChatActions();
         messageDAO.markConversationRead(Session.getCurrentUserId(), selectedUser.getUserId());
         List<MessageDAO.ChatMessage> messages = messageDAO.getConversation(Session.getCurrentUserId(), selectedUser.getUserId());
 
@@ -340,6 +370,47 @@ public class ChatWindow extends JFrame {
         followButton.setVisible(true);
     }
 
+    private void updateChatActions() {
+        if (selectedUser == null) {
+            setChatActionsVisible(false);
+            composer.setEnabled(false);
+            return;
+        }
+
+        updateFollowButton();
+        MessageDAO.ChatAccess access = messageDAO.getChatAccess(Session.getCurrentUserId(), selectedUser.getUserId());
+        boolean blockedByMe = new BlockDAO().isUserBlocked(Session.getCurrentUserId(), selectedUser.getUserId());
+
+        requestButton.setVisible(!access.canChat() && !access.isBlocked()
+                && !access.isPendingOutgoing() && !access.isPendingIncoming());
+        acceptButton.setVisible(access.isPendingIncoming() && !access.isBlocked());
+        declineButton.setVisible(access.isPendingIncoming() && !access.isBlocked());
+        blockButton.setVisible(true);
+        blockButton.setText(blockedByMe ? "Unblock" : "Block");
+        blockButton.setForeground(blockedByMe ? TEXT_MUTED : NEON_PINK);
+
+        composer.setEnabled(access.canChat());
+        if (access.isBlocked()) {
+            accessStatus.setText(blockedByMe ? "You blocked this user." : "Chat unavailable because of a block.");
+        } else if (access.canChat()) {
+            accessStatus.setText(access.followsRecipient() ? "You follow this user. Chat is open." : "Chat access granted.");
+        } else if (access.isPendingOutgoing()) {
+            accessStatus.setText("Chat request sent. Waiting for approval.");
+        } else if (access.isPendingIncoming()) {
+            accessStatus.setText("This user requested chat access.");
+        } else {
+            accessStatus.setText("Follow this user or request chat access to message them.");
+        }
+    }
+
+    private void setChatActionsVisible(boolean visible) {
+        followButton.setVisible(visible);
+        requestButton.setVisible(visible);
+        acceptButton.setVisible(visible);
+        declineButton.setVisible(visible);
+        blockButton.setVisible(visible);
+    }
+
     private void toggleSelectedFollow() {
         if (selectedUser == null) {
             return;
@@ -355,6 +426,60 @@ public class ChatWindow extends JFrame {
 
         SoundFX.success();
         updateFollowButton();
+        updateChatActions();
+    }
+
+    private void requestChatAccess() {
+        if (selectedUser == null) {
+            return;
+        }
+
+        boolean ok = messageDAO.requestChatAccess(Session.getCurrentUserId(), selectedUser.getUserId());
+        if (!ok) {
+            SoundFX.error();
+            JOptionPane.showMessageDialog(this, "Chat request could not be sent.", "Clixky", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        SoundFX.success();
+        updateChatActions();
+    }
+
+    private void respondToChatRequest(boolean accepted) {
+        if (selectedUser == null) {
+            return;
+        }
+
+        boolean ok = messageDAO.respondToChatRequest(selectedUser.getUserId(), Session.getCurrentUserId(), accepted);
+        if (!ok) {
+            SoundFX.error();
+            JOptionPane.showMessageDialog(this, "Chat request could not be updated.", "Clixky", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        SoundFX.success();
+        updateChatActions();
+    }
+
+    private void toggleSelectedBlock() {
+        if (selectedUser == null) {
+            return;
+        }
+
+        BlockDAO blockDAO = new BlockDAO();
+        boolean blocked = blockDAO.isUserBlocked(Session.getCurrentUserId(), selectedUser.getUserId());
+        boolean ok = blocked
+                ? blockDAO.unblockUser(Session.getCurrentUserId(), selectedUser.getUserId())
+                : blockDAO.blockUser(Session.getCurrentUserId(), selectedUser.getUserId());
+
+        if (!ok) {
+            SoundFX.error();
+            JOptionPane.showMessageDialog(this, "Block action failed.", "Clixky", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        SoundFX.success();
+        updateChatActions();
     }
 
     private void refreshCurrentConversation() {
@@ -382,6 +507,11 @@ public class ChatWindow extends JFrame {
 
         if (body.length() > 1000) {
             JOptionPane.showMessageDialog(this, "Message must be 1000 characters or fewer.", "Clixky", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        if (!messageDAO.getChatAccess(Session.getCurrentUserId(), selectedUser.getUserId()).canChat()) {
+            JOptionPane.showMessageDialog(this, "You need chat access before sending messages.", "Clixky", JOptionPane.ERROR_MESSAGE);
             return;
         }
 

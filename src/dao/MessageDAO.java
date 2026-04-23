@@ -36,6 +36,29 @@ public class MessageDAO {
         public int getUnreadCount() { return unreadCount; }
     }
 
+    public static class ChatAccess {
+        private final boolean canChat;
+        private final boolean followsRecipient;
+        private final boolean blocked;
+        private final boolean pendingOutgoing;
+        private final boolean pendingIncoming;
+
+        public ChatAccess(boolean canChat, boolean followsRecipient, boolean blocked,
+                          boolean pendingOutgoing, boolean pendingIncoming) {
+            this.canChat = canChat;
+            this.followsRecipient = followsRecipient;
+            this.blocked = blocked;
+            this.pendingOutgoing = pendingOutgoing;
+            this.pendingIncoming = pendingIncoming;
+        }
+
+        public boolean canChat() { return canChat; }
+        public boolean followsRecipient() { return followsRecipient; }
+        public boolean isBlocked() { return blocked; }
+        public boolean isPendingOutgoing() { return pendingOutgoing; }
+        public boolean isPendingIncoming() { return pendingIncoming; }
+    }
+
     public static class ChatMessage {
         private final int messageId;
         private final int senderId;
@@ -177,6 +200,10 @@ public class MessageDAO {
             return false;
         }
 
+        if (!getChatAccess(senderId, recipientId).canChat()) {
+            return false;
+        }
+
         String sql = """
                 INSERT INTO Messages (sender_id, recipient_id, message_body)
                 VALUES (?, ?, ?)
@@ -192,6 +219,93 @@ public class MessageDAO {
 
         } catch (SQLException e) {
             System.out.println("Send message database error: " + e.getMessage());
+        }
+
+        return false;
+    }
+
+    public ChatAccess getChatAccess(int currentUserId, int otherUserId) {
+        boolean blocked = new BlockDAO().isEitherUserBlocked(currentUserId, otherUserId);
+        boolean follows = exists("""
+                SELECT 1 FROM User_Follows
+                WHERE follower_id = ? AND followed_id = ?
+                LIMIT 1
+                """, currentUserId, otherUserId);
+        boolean acceptedEitherWay = exists("""
+                SELECT 1 FROM Chat_Access_Requests
+                WHERE status = 'accepted'
+                  AND (
+                        (requester_id = ? AND recipient_id = ?)
+                        OR (requester_id = ? AND recipient_id = ?)
+                  )
+                LIMIT 1
+                """, currentUserId, otherUserId, otherUserId, currentUserId);
+        boolean pendingOutgoing = exists("""
+                SELECT 1 FROM Chat_Access_Requests
+                WHERE requester_id = ? AND recipient_id = ? AND status = 'pending'
+                LIMIT 1
+                """, currentUserId, otherUserId);
+        boolean pendingIncoming = exists("""
+                SELECT 1 FROM Chat_Access_Requests
+                WHERE requester_id = ? AND recipient_id = ? AND status = 'pending'
+                LIMIT 1
+                """, otherUserId, currentUserId);
+
+        return new ChatAccess(!blocked && (follows || acceptedEitherWay), follows, blocked, pendingOutgoing, pendingIncoming);
+    }
+
+    public boolean requestChatAccess(int requesterId, int recipientId) {
+        if (requesterId == recipientId || new BlockDAO().isEitherUserBlocked(requesterId, recipientId)) {
+            return false;
+        }
+
+        String sql = """
+                INSERT INTO Chat_Access_Requests (requester_id, recipient_id, status)
+                VALUES (?, ?, 'pending')
+                ON CONFLICT(requester_id, recipient_id)
+                DO UPDATE SET
+                    status = CASE
+                        WHEN Chat_Access_Requests.status = 'accepted' THEN 'accepted'
+                        ELSE 'pending'
+                    END,
+                    requested_at = CASE
+                        WHEN Chat_Access_Requests.status = 'accepted' THEN Chat_Access_Requests.requested_at
+                        ELSE CURRENT_TIMESTAMP
+                    END,
+                    responded_at = CASE
+                        WHEN Chat_Access_Requests.status = 'accepted' THEN Chat_Access_Requests.responded_at
+                        ELSE NULL
+                    END
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, requesterId);
+            stmt.setInt(2, recipientId);
+            stmt.executeUpdate();
+            return true;
+        } catch (SQLException e) {
+            System.out.println("Chat request database error: " + e.getMessage());
+        }
+
+        return false;
+    }
+
+    public boolean respondToChatRequest(int requesterId, int recipientId, boolean accepted) {
+        String sql = """
+                UPDATE Chat_Access_Requests
+                SET status = ?, responded_at = CURRENT_TIMESTAMP
+                WHERE requester_id = ? AND recipient_id = ? AND status = 'pending'
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, accepted ? "accepted" : "declined");
+            stmt.setInt(2, requesterId);
+            stmt.setInt(3, recipientId);
+            return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            System.out.println("Chat request response database error: " + e.getMessage());
         }
 
         return false;
@@ -214,5 +328,20 @@ public class MessageDAO {
         } catch (SQLException e) {
             System.out.println("Mark messages read database error: " + e.getMessage());
         }
+    }
+
+    private boolean exists(String sql, int... values) {
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            for (int i = 0; i < values.length; i++) {
+                stmt.setInt(i + 1, values[i]);
+            }
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            System.out.println("Chat access database error: " + e.getMessage());
+        }
+        return false;
     }
 }

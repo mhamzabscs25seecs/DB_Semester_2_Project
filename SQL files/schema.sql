@@ -188,6 +188,49 @@ CHECK(sender_id <> recipient_id)
 CREATE INDEX idx_messages_conversation ON Messages(sender_id, recipient_id, sent_at);
 CREATE INDEX idx_messages_recipient_read ON Messages(recipient_id, read_at);
 
+CREATE TABLE Chat_Access_Requests (
+request_id INTEGER PRIMARY KEY AUTOINCREMENT,
+requester_id INTEGER NOT NULL,
+recipient_id INTEGER NOT NULL,
+status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'declined')),
+requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+responded_at DATETIME,
+
+FOREIGN KEY (requester_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+FOREIGN KEY (recipient_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+CHECK(requester_id <> recipient_id),
+UNIQUE(requester_id, recipient_id)
+);
+
+CREATE INDEX idx_chat_access_recipient_status ON Chat_Access_Requests(recipient_id, status, requested_at);
+
+CREATE TABLE User_Blocks (
+blocker_id INTEGER NOT NULL,
+blocked_id INTEGER NOT NULL,
+blocked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+PRIMARY KEY (blocker_id, blocked_id),
+
+FOREIGN KEY (blocker_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+FOREIGN KEY (blocked_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+CHECK(blocker_id <> blocked_id)
+);
+
+CREATE INDEX idx_user_blocks_blocked ON User_Blocks(blocked_id, blocked_at);
+
+CREATE TABLE Community_Blocks (
+user_id INTEGER NOT NULL,
+community_id INTEGER NOT NULL,
+blocked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+PRIMARY KEY (user_id, community_id),
+
+FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+FOREIGN KEY (community_id) REFERENCES Communities(community_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_community_blocks_community ON Community_Blocks(community_id, blocked_at);
+
 CREATE TABLE User_Follows (
 follower_id INTEGER NOT NULL,
 followed_id INTEGER NOT NULL,

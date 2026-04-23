@@ -7,6 +7,7 @@ dml_path = "/home/muhammad-hamza/Desktop/DB_Semester_2_Project/SQL files/DML.sql
 
 try:
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA temp_store = MEMORY")
     with open(dml_path, 'r') as f:
         sql_script = f.read()
     conn.executescript(sql_script)
@@ -54,4 +55,3 @@ except Exception as e:
     print(f"❌ Error: {e}")
     import traceback
     traceback.print_exc()
-

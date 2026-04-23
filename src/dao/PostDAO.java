@@ -279,10 +279,47 @@ public class PostDAO {
         return communities;
     }
 
+    public List<CommunityOption> getJoinedCommunities(int userId) {
+        List<CommunityOption> communities = new ArrayList<>();
+
+        String sql = """
+                SELECT c.community_id, c.community_name
+                FROM Communities c
+                JOIN Community_Membership cm ON c.community_id = cm.community_id
+                WHERE cm.user_id = ?
+                ORDER BY c.community_name ASC
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, userId);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    communities.add(new CommunityOption(
+                            rs.getInt("community_id"),
+                            rs.getString("community_name")
+                    ));
+                }
+            }
+
+        } catch (SQLException e) {
+            System.out.println("Joined communities database error: " + e.getMessage());
+        }
+
+        return communities;
+    }
+
     public int createPost(int userId, int communityId, String title, String body) {
         String sql = """
                 INSERT INTO Posts (posted_by, community_id, title, body)
-                VALUES (?, ?, ?, ?)
+                SELECT ?, ?, ?, ?
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM Community_Membership
+                    WHERE user_id = ? AND community_id = ?
+                )
                 """;
 
         try (Connection conn = DBConnection.getConnection();
@@ -292,6 +329,8 @@ public class PostDAO {
             stmt.setInt(2, communityId);
             stmt.setString(3, title);
             stmt.setString(4, body);
+            stmt.setInt(5, userId);
+            stmt.setInt(6, communityId);
             stmt.executeUpdate();
 
             try (ResultSet keys = stmt.getGeneratedKeys()) {

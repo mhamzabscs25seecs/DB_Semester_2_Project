@@ -7,6 +7,7 @@ import dao.Session;
 import dao.UserDAO;
 import dao.UserFollowDAO;
 import dao.VoteDAO;
+import dao.BlockDAO;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -482,6 +483,8 @@ public class PostViewScreen extends JFrame {
         card.add(Box.createVerticalStrut(12));
         card.add(buildFollowAction(profile));
         card.add(Box.createVerticalStrut(8));
+        card.add(buildBlockAction(profile));
+        card.add(Box.createVerticalStrut(8));
         card.add(close);
 
         dialog.setContentPane(card);
@@ -520,6 +523,35 @@ public class PostViewScreen extends JFrame {
         });
 
         return follow;
+    }
+
+    private JButton buildBlockAction(UserDAO.UserProfile profile) {
+        BlockDAO blockDAO = new BlockDAO();
+        boolean ownProfile = profile.getUserId() == Session.getCurrentUserId();
+        boolean blocked = !ownProfile && blockDAO.isUserBlocked(Session.getCurrentUserId(), profile.getUserId());
+
+        JButton block = makeButton(blocked ? "UNBLOCK USER" : "BLOCK USER", BG_CARD, blocked ? TEXT_MUTED : NEON_PINK, BORDER_COL);
+        block.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        block.setEnabled(!ownProfile);
+        if (ownProfile) {
+            block.setText("CANNOT BLOCK YOURSELF");
+        }
+
+        block.addActionListener(e -> {
+            boolean ok = blocked
+                    ? blockDAO.unblockUser(Session.getCurrentUserId(), profile.getUserId())
+                    : blockDAO.blockUser(Session.getCurrentUserId(), profile.getUserId());
+            if (!ok) {
+                SoundFX.error();
+                JOptionPane.showMessageDialog(this, "Block action failed.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            SoundFX.success();
+            SwingUtilities.getWindowAncestor(block).dispose();
+        });
+
+        return block;
     }
 
     private JPanel profileRow(String label, String value) {
