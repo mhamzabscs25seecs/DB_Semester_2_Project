@@ -8,7 +8,10 @@ public class Main {
 
     public static void main(String[] args) {
         // Always start Swing on the Event Dispatch Thread
-        SwingUtilities.invokeLater(() -> showLogin());
+        SwingUtilities.invokeLater(() -> {
+            LoginScreen.installGlobalFontZoomShortcuts();
+            showLogin();
+        });
     }
 
     // ── LOGIN ────────────────────────────────────────────────
@@ -17,10 +20,10 @@ public class Main {
     static void showLogin() {
         loginScreen = new LoginScreen(
             () -> {
-                // On successful login → go to Dashboard
+                // On successful login -> greeting, then dashboard
                 String user = Session.getCurrentUsername();
                 loginScreen.dispose();
-                showDashboard(user);
+                showLoginGreeting(user);
             },
             () -> {
                 // "Register" link clicked
@@ -30,21 +33,60 @@ public class Main {
         );
     }
 
+    static void showLoginGreeting(String username) {
+        welcomeScreen = new WelcomeScreen(
+            null,
+            () -> {
+                welcomeScreen.dispose();
+                showDashboard(username);
+            },
+            false
+        );
+    }
+
     // ── REGISTER ─────────────────────────────────────────────
     static RegisterScreen registerScreen;
 
     static void showRegister() {
         registerScreen = new RegisterScreen(
             () -> {
-                // Registration success → go to Dashboard
+                // Registration success -> welcome choice
                 String user = Session.getCurrentUsername();
                 registerScreen.dispose();
-                showDashboard(user);
+                showWelcome(user);
             },
             () -> {
                 // "Sign in" link clicked → back to Login
                 registerScreen.dispose();
                 showLogin();
+            }
+        );
+    }
+
+    // ── WELCOME ──────────────────────────────────────────────
+    static WelcomeScreen welcomeScreen;
+
+    static void showWelcome(String username) {
+        welcomeScreen = new WelcomeScreen(
+            () -> {
+                welcomeScreen.dispose();
+                showProfileSetup(username);
+            },
+            () -> {
+                welcomeScreen.dispose();
+                showDashboard(username);
+            }
+        );
+    }
+
+    // ── PROFILE SETUP ────────────────────────────────────────
+    static ProfileSetupScreen profileSetupScreen;
+
+    static void showProfileSetup(String username) {
+        profileSetupScreen = new ProfileSetupScreen(
+            () -> {
+                profileSetupScreen.dispose();
+                showDashboard(username);
             }
         );
     }

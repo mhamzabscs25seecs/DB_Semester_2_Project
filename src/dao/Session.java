@@ -6,26 +6,31 @@ public class Session {
     private static int currentUserId;
     private static String currentUsername;
     private static String currentEmail;
+    private static String currentRole;
 
     // Behaviours of a session
     public static void login (UserDAO.LoggedInUser user) {
         currentUserId = user.getUser_id();
         currentUsername = user.getUsername();
         currentEmail = user.getEmail();
+        currentRole = user.getRole();
     }
 
     public static void logout () {
         currentUserId = 0;
         currentUsername = null;
         currentEmail = null;
+        currentRole = null;
     }
 
     // Getters
     public static int getCurrentUserId() {return currentUserId;}
     public static String getCurrentUsername() {return currentUsername;}
     public static String getCurrentEmail() {return currentEmail;}
+    public static String getCurrentRole() {return currentRole;}
 
     // Checking if user is logged in
     public static boolean isLoggedIn() { return currentUserId > 0;  }
+    public static boolean isAdmin() { return "admin".equalsIgnoreCase(currentRole); }
     
 }

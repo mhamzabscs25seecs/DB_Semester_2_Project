@@ -12,6 +12,7 @@ user_id INTEGER PRIMARY KEY AUTOINCREMENT,
 username TEXT NOT NULL UNIQUE CHECK(LENGTH(username) <= 50),    
 email TEXT NOT NULL UNIQUE CHECK(LENGTH(email) <=50),
 password_hash TEXT NOT NULL,
+role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user', 'admin')),
 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP    
 /*When the profile is created, we do not want to go to the hassle of 
 	manually configuring the time of creation so we put DEFAULT value by CURRENT_TIMESTAMP */
@@ -42,7 +43,7 @@ CREATE TABLE Communities (
 	/* Although there is no harm in communities having same name, i think its better if we keep them unique so that if a user wants to join a 
 		specific community he might have trouble navigating */
 community_id INTEGER PRIMARY KEY AUTOINCREMENT,
-community_name TEXT NOT NULL UNIQUE CHECK(LENGTH(community_name) <= 50),
+community_name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK(LENGTH(TRIM(community_name)) > 0 AND LENGTH(community_name) <= 50),
 description TEXT CHECK(LENGTH(description) <= 300),
 
 -- Each community is created by one user at the time of creation.
@@ -77,7 +78,7 @@ post_id INTEGER PRIMARY KEY AUTOINCREMENT,
 posted_by INTEGER NOT NULL,
 community_id INTEGER NOT NULL,
 title TEXT NOT NULL CHECK(LENGTH(title) <= 100),
-body TEXT CHECK(LENGTH(body) <= 5000),
+body TEXT NOT NULL CHECK(LENGTH(TRIM(body)) > 0 AND LENGTH(body) <= 5000),
 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 updated_at DATETIME,
 
@@ -144,5 +145,102 @@ FOREIGN KEY (comment_voter_id) REFERENCES Users (user_id)
 UNIQUE (comment_voter_id, comment_id)
 );
 
+CREATE TABLE Saved_Posts (
+user_id INTEGER NOT NULL,
+post_id INTEGER NOT NULL,
+saved_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
+PRIMARY KEY (user_id, post_id),
 
+FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+FOREIGN KEY (post_id) REFERENCES Posts(post_id) ON DELETE CASCADE
+);
+
+CREATE TABLE Reports (
+report_id INTEGER PRIMARY KEY AUTOINCREMENT,
+reported_by INTEGER NOT NULL,
+target_type TEXT NOT NULL CHECK(target_type IN ('post', 'comment', 'community')),
+target_id INTEGER NOT NULL,
+reason TEXT NOT NULL CHECK(LENGTH(TRIM(reason)) > 0 AND LENGTH(reason) <= 80),
+details TEXT CHECK(LENGTH(details) <= 500),
+status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'reviewed', 'dismissed')),
+created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+FOREIGN KEY (reported_by) REFERENCES Users(user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_reports_target ON Reports(target_type, target_id);
+CREATE INDEX idx_reports_status ON Reports(status);
+
+CREATE TABLE Messages (
+message_id INTEGER PRIMARY KEY AUTOINCREMENT,
+sender_id INTEGER NOT NULL,
+recipient_id INTEGER NOT NULL,
+message_body TEXT NOT NULL CHECK(LENGTH(TRIM(message_body)) > 0 AND LENGTH(message_body) <= 1000),
+sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+read_at DATETIME,
+
+FOREIGN KEY (sender_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+FOREIGN KEY (recipient_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+CHECK(sender_id <> recipient_id)
+);
+
+CREATE INDEX idx_messages_conversation ON Messages(sender_id, recipient_id, sent_at);
+CREATE INDEX idx_messages_recipient_read ON Messages(recipient_id, read_at);
+
+CREATE TABLE Chat_Access_Requests (
+request_id INTEGER PRIMARY KEY AUTOINCREMENT,
+requester_id INTEGER NOT NULL,
+recipient_id INTEGER NOT NULL,
+status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'declined')),
+requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+responded_at DATETIME,
+
+FOREIGN KEY (requester_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+FOREIGN KEY (recipient_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+CHECK(requester_id <> recipient_id),
+UNIQUE(requester_id, recipient_id)
+);
+
+CREATE INDEX idx_chat_access_recipient_status ON Chat_Access_Requests(recipient_id, status, requested_at);
+
+CREATE TABLE User_Blocks (
+blocker_id INTEGER NOT NULL,
+blocked_id INTEGER NOT NULL,
+blocked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+PRIMARY KEY (blocker_id, blocked_id),
+
+FOREIGN KEY (blocker_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+FOREIGN KEY (blocked_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+CHECK(blocker_id <> blocked_id)
+);
+
+CREATE INDEX idx_user_blocks_blocked ON User_Blocks(blocked_id, blocked_at);
+
+CREATE TABLE Community_Blocks (
+user_id INTEGER NOT NULL,
+community_id INTEGER NOT NULL,
+blocked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+PRIMARY KEY (user_id, community_id),
+
+FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+FOREIGN KEY (community_id) REFERENCES Communities(community_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_community_blocks_community ON Community_Blocks(community_id, blocked_at);
+
+CREATE TABLE User_Follows (
+follower_id INTEGER NOT NULL,
+followed_id INTEGER NOT NULL,
+followed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+PRIMARY KEY (follower_id, followed_id),
+
+FOREIGN KEY (follower_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+FOREIGN KEY (followed_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+CHECK(follower_id <> followed_id)
+);
+
+CREATE INDEX idx_user_follows_followed ON User_Follows(followed_id, followed_at);
