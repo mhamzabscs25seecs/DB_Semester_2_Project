@@ -12,6 +12,7 @@ user_id INTEGER PRIMARY KEY AUTOINCREMENT,
 username TEXT NOT NULL UNIQUE CHECK(LENGTH(username) <= 50),    
 email TEXT NOT NULL UNIQUE CHECK(LENGTH(email) <=50),
 password_hash TEXT NOT NULL,
+role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user', 'admin')),
 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP    
 /*When the profile is created, we do not want to go to the hassle of 
 	manually configuring the time of creation so we put DEFAULT value by CURRENT_TIMESTAMP */
@@ -42,7 +43,7 @@ CREATE TABLE Communities (
 	/* Although there is no harm in communities having same name, i think its better if we keep them unique so that if a user wants to join a 
 		specific community he might have trouble navigating */
 community_id INTEGER PRIMARY KEY AUTOINCREMENT,
-community_name TEXT NOT NULL UNIQUE CHECK(LENGTH(community_name) <= 50),
+community_name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK(LENGTH(TRIM(community_name)) > 0 AND LENGTH(community_name) <= 50),
 description TEXT CHECK(LENGTH(description) <= 300),
 
 -- Each community is created by one user at the time of creation.
@@ -144,4 +145,29 @@ FOREIGN KEY (comment_voter_id) REFERENCES Users (user_id)
 UNIQUE (comment_voter_id, comment_id)
 );
 
+CREATE TABLE Saved_Posts (
+user_id INTEGER NOT NULL,
+post_id INTEGER NOT NULL,
+saved_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
+PRIMARY KEY (user_id, post_id),
+
+FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+FOREIGN KEY (post_id) REFERENCES Posts(post_id) ON DELETE CASCADE
+);
+
+CREATE TABLE Reports (
+report_id INTEGER PRIMARY KEY AUTOINCREMENT,
+reported_by INTEGER NOT NULL,
+target_type TEXT NOT NULL CHECK(target_type IN ('post', 'comment', 'community')),
+target_id INTEGER NOT NULL,
+reason TEXT NOT NULL CHECK(LENGTH(TRIM(reason)) > 0 AND LENGTH(reason) <= 80),
+details TEXT CHECK(LENGTH(details) <= 500),
+status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'reviewed', 'dismissed')),
+created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+FOREIGN KEY (reported_by) REFERENCES Users(user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_reports_target ON Reports(target_type, target_id);
+CREATE INDEX idx_reports_status ON Reports(status);

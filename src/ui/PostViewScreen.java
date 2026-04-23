@@ -1,7 +1,10 @@
 package ui;
 
 import dao.CommentDAO;
+import dao.ReportDAO;
+import dao.SavedPostDAO;
 import dao.Session;
+import dao.UserDAO;
 import dao.VoteDAO;
 
 import javax.swing.*;
@@ -64,7 +67,7 @@ public class PostViewScreen extends JFrame {
         logo.setFont(new Font("Segoe UI", Font.BOLD, 18));
         logo.setForeground(NEON_PINK);
 
-        JButton backBtn = makeSmallButton("← Back to Feed", BG_CARD, TEXT_MUTED, BORDER_COL);
+        JButton backBtn = makeSmallButton("< Back to Feed", BG_CARD, NEON_CYAN, BORDER_COL);
         backBtn.addActionListener(e -> {
             if (onBack != null) {
                 dispose();
@@ -98,26 +101,20 @@ public class PostViewScreen extends JFrame {
 
     // ── BODY ─────────────────────────────────────────────────────────────────
 
-    private JSplitPane buildBody() {
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildMain(), buildSidebar());
-        split.setDividerLocation(760);
-        split.setDividerSize(1);
-        split.setBorder(null);
-        split.setBackground(BG_DEEP);
-        split.setResizeWeight(0.75);
-        split.setContinuousLayout(true);
-        return split;
+    private JPanel buildBody() {
+        JPanel body = new JPanel(new BorderLayout());
+        body.setBackground(BG_DEEP);
+        body.add(buildMain(), BorderLayout.CENTER);
+        return body;
     }
 
     // ── MAIN ─────────────────────────────────────────────────────────────────
 
     private JScrollPane buildMain() {
-        JPanel main = new JPanel(new BorderLayout(0, 12));
-        main.setBackground(BG_DEEP);
-        main.setBorder(new EmptyBorder(16, 16, 16, 12));
-
-        main.add(buildPostCard(),      BorderLayout.NORTH);
-        main.add(buildReplyComposer(), BorderLayout.CENTER);
+        JPanel column = new JPanel();
+        column.setLayout(new BoxLayout(column, BoxLayout.Y_AXIS));
+        column.setOpaque(false);
+        column.setBorder(new EmptyBorder(20, 24, 24, 24));
 
         CommentDAO commentDAO = new CommentDAO();
         commentsScroll = CommentPanel.buildTree(loadComments(), currentUser, (parentCommentId, text) -> {
@@ -149,15 +146,35 @@ public class PostViewScreen extends JFrame {
             new Color(NEON_PINK.getRed(), NEON_PINK.getGreen(), NEON_PINK.getBlue(), 60)));
         commentsScroll.setPreferredSize(new Dimension(0, 380));
 
-        JPanel wrapper = new JPanel(new BorderLayout(0, 12));
+        JLabel commentsHeader = new JLabel(post.comments + " Comments");
+        commentsHeader.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        commentsHeader.setForeground(NEON_PINK);
+        commentsHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        column.add(buildPostCard());
+        column.add(Box.createVerticalStrut(14));
+        column.add(buildReplyComposer());
+        column.add(Box.createVerticalStrut(18));
+        column.add(commentsHeader);
+        column.add(Box.createVerticalStrut(8));
+        column.add(commentsScroll);
+
+        JPanel wrapper = new JPanel(new GridBagLayout());
         wrapper.setBackground(BG_DEEP);
-        wrapper.add(main,           BorderLayout.NORTH);
-        wrapper.add(commentsScroll, BorderLayout.CENTER);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 1;
+        gbc.weighty = 1;
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.insets = new Insets(0, 24, 0, 24);
+        wrapper.add(column, gbc);
 
         JScrollPane outerScroll = new JScrollPane(wrapper);
         outerScroll.setBorder(null);
         outerScroll.setBackground(BG_DEEP);
         outerScroll.getViewport().setBackground(BG_DEEP);
+        outerScroll.getVerticalScrollBar().setUnitIncrement(16);
         return outerScroll;
     }
 
@@ -169,6 +186,7 @@ public class PostViewScreen extends JFrame {
             comments.add(new CommentPanel.CommentData(
                     comment.getCommentId(),
                     comment.getParentCommentId(),
+                    comment.getAuthorId(),
                     "u/" + comment.getAuthor(),
                     escapeHtml(comment.getBody()),
                     comment.getCommentedAt(),
@@ -181,8 +199,10 @@ public class PostViewScreen extends JFrame {
 
     private JPanel buildPostCard() {
         JPanel card = new RoundPanel(10, BG_PANEL, BORDER_COL);
-        card.setLayout(new BorderLayout(14, 0));
-        card.setBorder(new EmptyBorder(16, 16, 16, 16));
+        card.setLayout(new BorderLayout(16, 0));
+        card.setBorder(new EmptyBorder(18, 18, 18, 18));
+        card.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
 
         // Vote column
         JPanel voteCol = new JPanel();
@@ -235,39 +255,238 @@ public class PostViewScreen extends JFrame {
         voteCol.add(Box.createVerticalGlue());
 
         // Content
-        JPanel content = new JPanel(new BorderLayout(0, 10));
+        JPanel content = new JPanel();
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.setOpaque(false);
 
-        JLabel breadcrumb = new JLabel(post.subreddit + "  ·  Posted by " + post.author + "  ·  " + post.time);
-        breadcrumb.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        breadcrumb.setForeground(NEON_DIM);
+        JPanel breadcrumb = buildClickableBreadcrumb();
 
-        JLabel title = new JLabel("<html><body style='width:580px; font-family:Segoe UI; font-size:17px; font-weight:bold; color:" + htmlColor(TEXT_MAIN) + "'>"
+        JLabel title = new JLabel("<html><body style='width:720px; font-family:Segoe UI; font-size:20px; font-weight:bold; color:" + htmlColor(TEXT_MAIN) + "'>"
             + post.title + "</body></html>");
+        title.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel body = new JLabel("<html><body style='width:580px; font-family:Segoe UI; font-size:15px; color:" + htmlColor(TEXT_MUTED) + "; line-height:1.7'>"
+        JLabel body = new JLabel("<html><body style='width:720px; font-family:Segoe UI; font-size:15px; color:" + htmlColor(TEXT_MUTED) + "; line-height:1.7'>"
             + escapeHtml(post.body)
             + "</body></html>");
+        body.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         // Action bar
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         actions.setOpaque(false);
+        actions.setAlignmentX(Component.LEFT_ALIGNMENT);
         actions.add(makeChip("💬  " + post.comments + " Comments", this::toggleComments));
         actions.add(makeChip("↗  Share"));
-        actions.add(makeChip("🔖  Save"));
+        JLabel saveChip = makeChip(new SavedPostDAO().isPostSaved(Session.getCurrentUserId(), post.id)
+                ? "🔖  Saved"
+                : "🔖  Save");
+        saveChip.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                SoundFX.click();
+                if (!Session.isLoggedIn()) {
+                    JOptionPane.showMessageDialog(PostViewScreen.this, "Please log in first.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
 
-        content.add(breadcrumb, BorderLayout.NORTH);
-        content.add(title,      BorderLayout.CENTER);
-        content.add(body,       BorderLayout.SOUTH);
+                SavedPostDAO dao = new SavedPostDAO();
+                boolean ok = dao.toggleSavedPost(Session.getCurrentUserId(), post.id);
+                if (!ok) {
+                    SoundFX.error();
+                    JOptionPane.showMessageDialog(PostViewScreen.this, "Save action failed.", "Clixky", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
 
-        JPanel bottom = new JPanel(new BorderLayout());
-        bottom.setOpaque(false);
-        bottom.add(actions, BorderLayout.WEST);
-        content.add(bottom, BorderLayout.EAST);
+                saveChip.setText(dao.isPostSaved(Session.getCurrentUserId(), post.id) ? "🔖  Saved" : "🔖  Save");
+            }
+        });
+        actions.add(saveChip);
+        actions.add(makeChip("⚑  Report", () -> reportPost()));
+
+        content.add(breadcrumb);
+        content.add(Box.createVerticalStrut(10));
+        content.add(title);
+        content.add(Box.createVerticalStrut(12));
+        content.add(body);
+        content.add(Box.createVerticalStrut(16));
+        content.add(actions);
 
         card.add(voteCol,  BorderLayout.WEST);
         card.add(content,  BorderLayout.CENTER);
         return card;
+    }
+
+    private void reportPost() {
+        if (!Session.isLoggedIn()) {
+            JOptionPane.showMessageDialog(this, "Please log in first.", "Clixky", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        ReportInput report = showReportDialog(this, "Post");
+        if (report == null) {
+            return;
+        }
+
+        boolean ok = new ReportDAO().reportPost(
+                Session.getCurrentUserId(),
+                post.id,
+                report.getReason(),
+                report.getDetails()
+        );
+        if (!ok) {
+            SoundFX.error();
+            JOptionPane.showMessageDialog(this, "Report could not be submitted.", "Clixky", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        SoundFX.success();
+        JOptionPane.showMessageDialog(this, "Report submitted.", "Clixky", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private JPanel buildClickableBreadcrumb() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 22));
+
+        JLabel community = makeMetaLink(post.subreddit);
+        community.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                SoundFX.click();
+                dispose();
+                new DashboardScreen(currentUser, openedPost -> {
+                    PostViewScreen.this.dispose();
+                    new PostViewScreen(openedPost, currentUser, onBack);
+                }, post.communityId, cleanCommunityName(post.subreddit));
+            }
+        });
+
+        JLabel by = makeMetaText(" · Posted by ");
+
+        JLabel author = makeMetaLink(post.author);
+        author.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                SoundFX.click();
+                showAuthorProfileDialog();
+            }
+        });
+
+        row.add(community);
+        row.add(by);
+        row.add(author);
+        row.add(makeMetaText(" · " + post.time));
+        return row;
+    }
+
+    private JLabel makeMetaLink(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        label.setForeground(NEON_CYAN);
+        label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        label.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) { label.setForeground(NEON_PINK); }
+            public void mouseExited(MouseEvent e)  { label.setForeground(NEON_CYAN); }
+        });
+        return label;
+    }
+
+    private JLabel makeMetaText(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        label.setForeground(NEON_DIM);
+        return label;
+    }
+
+    private String cleanCommunityName(String communityLabel) {
+        return communityLabel == null ? null : communityLabel.replaceFirst("^r/", "");
+    }
+
+    private void showAuthorProfileDialog() {
+        UserDAO.UserProfile profile = new UserDAO().getProfileById(post.authorId);
+        if (profile == null) {
+            JOptionPane.showMessageDialog(this, "Profile data could not be loaded.", "Clixky", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        JDialog dialog = new JDialog(this, "Clixky Profile", true);
+        dialog.setSize(390, 390);
+        dialog.setLocationRelativeTo(this);
+        dialog.setResizable(false);
+        dialog.setUndecorated(true);
+
+        JPanel card = new RoundPanel(14, BG_PANEL, BORDER_COL);
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBorder(new EmptyBorder(24, 28, 24, 28));
+
+        JLabel avatar = new JLabel(profile.getUsername().substring(0, 1).toUpperCase()) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(BG_CARD);
+                g2.fillOval(0, 0, getWidth(), getHeight());
+                g2.setColor(NEON_PINK);
+                g2.setStroke(new BasicStroke(2f));
+                g2.drawOval(1, 1, getWidth() - 2, getHeight() - 2);
+                super.paintComponent(g);
+            }
+        };
+        avatar.setPreferredSize(new Dimension(54, 54));
+        avatar.setMaximumSize(new Dimension(54, 54));
+        avatar.setHorizontalAlignment(SwingConstants.CENTER);
+        avatar.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        avatar.setForeground(NEON_CYAN);
+        avatar.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel name = new JLabel(nullToFallback(profile.getDisplayName(), profile.getUsername()));
+        name.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        name.setForeground(NEON_PINK);
+        name.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel username = new JLabel("@" + profile.getUsername());
+        username.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        username.setForeground(NEON_MID);
+        username.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JButton close = makeButton("CLOSE", BG_CARD, NEON_CYAN, BORDER_COL);
+        close.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        close.addActionListener(e -> dialog.dispose());
+
+        card.add(avatar);
+        card.add(Box.createVerticalStrut(10));
+        card.add(name);
+        card.add(Box.createVerticalStrut(4));
+        card.add(username);
+        card.add(Box.createVerticalStrut(18));
+        card.add(profileRow("BIO", nullToFallback(profile.getBioText(), "No bio yet.")));
+        card.add(profileRow("COUNTRY", nullToFallback(profile.getCountry(), "Not set")));
+        card.add(profileRow("BIRTH YEAR", String.valueOf(profile.getBirthYear())));
+        card.add(profileRow("PRIVACY", profile.isPrivate() ? "Private" : "Public"));
+        card.add(Box.createVerticalStrut(18));
+        card.add(close);
+
+        dialog.setContentPane(card);
+        dialog.setVisible(true);
+    }
+
+    private JPanel profileRow(String label, String value) {
+        JPanel row = new JPanel(new BorderLayout(12, 0));
+        row.setOpaque(false);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+
+        JLabel key = new JLabel(label);
+        key.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        key.setForeground(NEON_MID);
+
+        JLabel val = new JLabel(value);
+        val.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        val.setForeground(TEXT_MAIN);
+        val.setHorizontalAlignment(SwingConstants.RIGHT);
+
+        row.add(key, BorderLayout.WEST);
+        row.add(val, BorderLayout.CENTER);
+        return row;
+    }
+
+    private String nullToFallback(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     private void updatePostVoteButtons(JButton upBtn, JButton downBtn, JLabel score, int currentVote) {
@@ -284,6 +503,8 @@ public class PostViewScreen extends JFrame {
         JPanel box = new RoundPanel(8, BG_PANEL, BORDER_COL);
         box.setLayout(new BorderLayout(0, 10));
         box.setBorder(new EmptyBorder(14, 14, 14, 14));
+        box.setAlignmentX(Component.LEFT_ALIGNMENT);
+        box.setMaximumSize(new Dimension(Integer.MAX_VALUE, 180));
 
         JLabel heading = new JLabel("Add a comment as  " + currentUser);
         heading.setFont(new Font("Segoe UI", Font.BOLD, 14));
@@ -540,7 +761,7 @@ public class PostViewScreen extends JFrame {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             PostData samplePost = new PostData(
-                2, "3NF vs BCNF — When does it actually matter in production?",
+                2, 3, 2, "3NF vs BCNF — When does it actually matter in production?",
                 "BCNF can matter when dependencies overlap in a schema.",
                 "u/hamza_dev", "r/DatabaseDesign", "6h ago", 412, 47
             );

@@ -1,6 +1,8 @@
 package ui;
 
 import dao.Session;
+import dao.ReportDAO;
+import dao.UserDAO;
 import dao.VoteDAO;
 
 import javax.swing.*;
@@ -29,12 +31,12 @@ public class CommentPanel extends JPanel {
 
     // ── Comment DTO ───────────────────────────────────────────────────────────
     public static class CommentData {
-        public int    id, parentId, score;
+        public int    id, parentId, authorId, score;
         public String author, body, timestamp;
         public List<CommentData> children = new ArrayList<>();
 
-        public CommentData(int id, int parentId, String author, String body, String timestamp, int score) {
-            this.id = id; this.parentId = parentId; this.author = author;
+        public CommentData(int id, int parentId, int authorId, String author, String body, String timestamp, int score) {
+            this.id = id; this.parentId = parentId; this.authorId = authorId; this.author = author;
             this.body = body; this.timestamp = timestamp; this.score = score;
         }
     }
@@ -162,10 +164,25 @@ public class CommentPanel extends JPanel {
         avatar.setHorizontalAlignment(SwingConstants.CENTER);
         avatar.setFont(new Font("Segoe UI", Font.BOLD, 10));
         avatar.setForeground(NEON_CYAN);
+        avatar.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
         JLabel authorLabel = new JLabel(data.author);
         authorLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
         authorLabel.setForeground(data.author.equals(currentUser) ? GOLD : NEON_MID);
+        authorLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        MouseAdapter openProfile = new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                SoundFX.click();
+                showProfileDialog();
+            }
+            public void mouseEntered(MouseEvent e) { authorLabel.setForeground(NEON_CYAN); }
+            public void mouseExited(MouseEvent e)  {
+                authorLabel.setForeground(data.author.equals(currentUser) ? GOLD : NEON_MID);
+            }
+        };
+        avatar.addMouseListener(openProfile);
+        authorLabel.addMouseListener(openProfile);
 
         JLabel scoreLabel = new JLabel("▲ " + data.score);
         scoreLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
@@ -204,6 +221,7 @@ public class CommentPanel extends JPanel {
         JButton upBtn    = makeActionBtn("▲ Upvote");
         JButton downBtn  = makeActionBtn("▼");
         JButton replyBtn = makeActionBtn("↩ Reply");
+        JButton reportBtn = makeActionBtn("⚑ Report");
         JButton deleteBtn = makeDeleteBtn("Delete");
         final int[] currentVote = {
                 Session.isLoggedIn() ? new VoteDAO().getCommentUserVote(data.id, Session.getCurrentUserId()) : 0
@@ -235,12 +253,14 @@ public class CommentPanel extends JPanel {
             updateCommentVoteButtons(upBtn, downBtn, scoreLabel, currentVote[0]);
         });
         replyBtn.addActionListener(e -> showReplyComposer(outer));
+        reportBtn.addActionListener(e -> reportComment());
         deleteBtn.addActionListener(e -> handleDelete());
 
         actions.add(upBtn);
         actions.add(downBtn);
         actions.add(replyBtn);
-        if (isOwnComment()) {
+        actions.add(reportBtn);
+        if (canDeleteComment()) {
             actions.add(deleteBtn);
         }
 
@@ -271,15 +291,108 @@ public class CommentPanel extends JPanel {
         return data.author.equals(currentUser) || data.author.equals("u/" + currentUser);
     }
 
+    private boolean canDeleteComment() {
+        return isOwnComment() || Session.isAdmin();
+    }
+
+    private void showProfileDialog() {
+        UserDAO.UserProfile profile = new UserDAO().getProfileById(data.authorId);
+        if (profile == null) {
+            JOptionPane.showMessageDialog(this, "Profile data could not be loaded.", "Clixky", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(this), "Clixky Profile", Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setSize(390, 390);
+        dialog.setLocationRelativeTo(this);
+        dialog.setResizable(false);
+        dialog.setUndecorated(true);
+
+        JPanel card = new RoundPanel(14, BG_PANEL, BORDER_COL);
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBorder(new EmptyBorder(24, 28, 24, 28));
+
+        JLabel avatar = new JLabel(profile.getUsername().substring(0, 1).toUpperCase()) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(BG_CARD);
+                g2.fillOval(0, 0, getWidth(), getHeight());
+                g2.setColor(NEON_PINK);
+                g2.setStroke(new BasicStroke(2f));
+                g2.drawOval(1, 1, getWidth() - 2, getHeight() - 2);
+                super.paintComponent(g);
+            }
+        };
+        avatar.setPreferredSize(new Dimension(54, 54));
+        avatar.setMaximumSize(new Dimension(54, 54));
+        avatar.setHorizontalAlignment(SwingConstants.CENTER);
+        avatar.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        avatar.setForeground(NEON_CYAN);
+        avatar.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel name = new JLabel(nullToFallback(profile.getDisplayName(), profile.getUsername()));
+        name.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        name.setForeground(NEON_PINK);
+        name.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel username = new JLabel("@" + profile.getUsername());
+        username.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        username.setForeground(NEON_MID);
+        username.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JButton close = makeButton("CLOSE", BG_CARD, NEON_CYAN, BORDER_COL);
+        close.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        close.addActionListener(e -> dialog.dispose());
+
+        card.add(avatar);
+        card.add(Box.createVerticalStrut(10));
+        card.add(name);
+        card.add(Box.createVerticalStrut(4));
+        card.add(username);
+        card.add(Box.createVerticalStrut(18));
+        card.add(profileRow("BIO", nullToFallback(profile.getBioText(), "No bio yet.")));
+        card.add(profileRow("COUNTRY", nullToFallback(profile.getCountry(), "Not set")));
+        card.add(profileRow("BIRTH YEAR", String.valueOf(profile.getBirthYear())));
+        card.add(profileRow("PRIVACY", profile.isPrivate() ? "Private" : "Public"));
+        card.add(Box.createVerticalStrut(18));
+        card.add(close);
+
+        dialog.setContentPane(card);
+        dialog.setVisible(true);
+    }
+
+    private JPanel profileRow(String label, String value) {
+        JPanel row = new JPanel(new BorderLayout(12, 0));
+        row.setOpaque(false);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+
+        JLabel key = new JLabel(label);
+        key.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        key.setForeground(NEON_MID);
+
+        JLabel val = new JLabel(value);
+        val.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        val.setForeground(TEXT_MAIN);
+        val.setHorizontalAlignment(SwingConstants.RIGHT);
+
+        row.add(key, BorderLayout.WEST);
+        row.add(val, BorderLayout.CENTER);
+        return row;
+    }
+
+    private String nullToFallback(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
     private void handleDelete() {
-        int choice = JOptionPane.showConfirmDialog(
+        boolean confirmed = showCyberConfirm(
                 this,
+                "Delete Comment",
                 "Delete this comment?",
-                "Clixky",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.WARNING_MESSAGE
+                "DELETE"
         );
-        if (choice != JOptionPane.YES_OPTION) {
+        if (!confirmed) {
             return;
         }
 
@@ -291,6 +404,33 @@ public class CommentPanel extends JPanel {
         }
 
         SoundFX.success();
+    }
+
+    private void reportComment() {
+        if (!Session.isLoggedIn()) {
+            JOptionPane.showMessageDialog(this, "Please log in first.", "Clixky", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        ReportInput report = showReportDialog(this, "Comment");
+        if (report == null) {
+            return;
+        }
+
+        boolean ok = new ReportDAO().reportComment(
+                Session.getCurrentUserId(),
+                data.id,
+                report.getReason(),
+                report.getDetails()
+        );
+        if (!ok) {
+            SoundFX.error();
+            JOptionPane.showMessageDialog(this, "Report could not be submitted.", "Clixky", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        SoundFX.success();
+        JOptionPane.showMessageDialog(this, "Report submitted.", "Clixky", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private Color commentCardColor() {
@@ -461,13 +601,13 @@ public class CommentPanel extends JPanel {
     // ── Sample comments ────────────────────────────────────────────────────
     public static List<CommentData> getSampleComments() {
         List<CommentData> list = new ArrayList<>();
-        list.add(new CommentData(1, 0, "u/db_expert",  "BCNF matters when you have overlapping candidate keys. In practice, if a 3NF table has no overlapping keys, it is automatically in BCNF. For your DB course though, knowing the difference conceptually is enough.", "4h ago", 156));
-        list.add(new CommentData(2, 1, "u/hamza_dev",  "That makes a lot of sense! So it is mostly an edge case in real schema design?", "3h ago", 34));
-        list.add(new CommentData(3, 2, "u/db_expert",  "Exactly. You will rarely encounter it unless you have compound keys with partial dependencies. Good luck with CS-220!", "3h ago", 28));
-        list.add(new CommentData(4, 0, "u/ali_codes",  "Good question for your Clixky project too — make sure your schema hits at least 3NF for the grade!", "2h ago", 89));
-        list.add(new CommentData(5, 4, "u/aayan_a",    "Ha, our ER diagram already has 5 tables fully normalized. Ask me anything!", "1h ago", 12));
-        list.add(new CommentData(6, 0, "u/sql_nerd",   "One practical place BCNF shows up: scheduling tables with course/room/time dependencies. Worth knowing for interviews.", "5h ago", 44));
-        list.add(new CommentData(7, 6, "u/hamza_dev",  "Oh interesting, I have a data structures exam next week too. Thanks!", "4h ago", 8));
+        list.add(new CommentData(1, 0, 0, "u/db_expert",  "BCNF matters when you have overlapping candidate keys. In practice, if a 3NF table has no overlapping keys, it is automatically in BCNF. For your DB course though, knowing the difference conceptually is enough.", "4h ago", 156));
+        list.add(new CommentData(2, 1, 0, "u/hamza_dev",  "That makes a lot of sense! So it is mostly an edge case in real schema design?", "3h ago", 34));
+        list.add(new CommentData(3, 2, 0, "u/db_expert",  "Exactly. You will rarely encounter it unless you have compound keys with partial dependencies. Good luck with CS-220!", "3h ago", 28));
+        list.add(new CommentData(4, 0, 0, "u/ali_codes",  "Good question for your Clixky project too — make sure your schema hits at least 3NF for the grade!", "2h ago", 89));
+        list.add(new CommentData(5, 4, 0, "u/aayan_a",    "Ha, our ER diagram already has 5 tables fully normalized. Ask me anything!", "1h ago", 12));
+        list.add(new CommentData(6, 0, 0, "u/sql_nerd",   "One practical place BCNF shows up: scheduling tables with course/room/time dependencies. Worth knowing for interviews.", "5h ago", 44));
+        list.add(new CommentData(7, 6, 0, "u/hamza_dev",  "Oh interesting, I have a data structures exam next week too. Thanks!", "4h ago", 8));
         return list;
     }
 }

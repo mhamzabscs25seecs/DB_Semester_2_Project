@@ -10,11 +10,13 @@ import java.awt.*;
 import static ui.LoginScreen.*;
 
 public class ProfileSetupScreen extends JFrame {
+    private static final int MIN_BIRTH_YEAR = 1900;
+
     private final Runnable onComplete;
     private JTextField displayNameField;
     private JTextField countryField;
     private JTextField phoneField;
-    private JTextField birthYearField;
+    private JComboBox<Integer> birthYearBox;
     private JTextArea bioArea;
     private JCheckBox privateBox;
 
@@ -54,7 +56,7 @@ public class ProfileSetupScreen extends JFrame {
         displayNameField = makeTextField("Display name");
         countryField = makeTextField("Country");
         phoneField = makeTextField("Phone number");
-        birthYearField = makeTextField("Birth year");
+        birthYearBox = makeBirthYearBox();
 
         bioArea = new JTextArea(4, 24);
         bioArea.setBackground(BG_DEEP);
@@ -96,7 +98,7 @@ public class ProfileSetupScreen extends JFrame {
         addField(card, "BIO", bioScroll);
         addField(card, "COUNTRY", countryField);
         addField(card, "PHONE", phoneField);
-        addField(card, "BIRTH YEAR", birthYearField);
+        addField(card, "BIRTH YEAR", birthYearBox);
         card.add(privateBox);
         card.add(Box.createVerticalStrut(18));
         card.add(saveBtn);
@@ -127,7 +129,7 @@ public class ProfileSetupScreen extends JFrame {
         setField(displayNameField, profile.getDisplayName());
         setField(countryField, profile.getCountry());
         setField(phoneField, profile.getPhoneNo());
-        setField(birthYearField, String.valueOf(profile.getBirthYear()));
+        birthYearBox.setSelectedItem(profile.getBirthYear());
         bioArea.setText(profile.getBioText() == null ? "" : profile.getBioText());
         privateBox.setSelected(profile.isPrivate());
     }
@@ -144,23 +146,15 @@ public class ProfileSetupScreen extends JFrame {
         String displayName = getFieldText(displayNameField);
         String country = getFieldText(countryField);
         String phone = getFieldText(phoneField);
-        String birthYearText = getFieldText(birthYearField);
+        Integer selectedBirthYear = (Integer) birthYearBox.getSelectedItem();
         String bio = bioArea.getText().trim();
-
-        int birthYear;
-        try {
-            birthYear = Integer.parseInt(birthYearText);
-        } catch (NumberFormatException e) {
-            showCyberError(this, "Invalid Birth Year", "Please enter a valid birth year.");
-            return;
-        }
 
         if (displayName.isBlank()) {
             showCyberError(this, "Missing Name", "Please enter a display name.");
             return;
         }
 
-        if (birthYear < 1900) {
+        if (selectedBirthYear == null) {
             showCyberError(this, "Invalid Birth Year", "Birth year must be 1900 or later.");
             return;
         }
@@ -171,7 +165,7 @@ public class ProfileSetupScreen extends JFrame {
                 bio,
                 country,
                 phone,
-                birthYear,
+                selectedBirthYear,
                 privateBox.isSelected()
         );
 
@@ -187,6 +181,25 @@ public class ProfileSetupScreen extends JFrame {
 
     private String getFieldText(JTextField field) {
         return field.getForeground().equals(NEON_DIM) ? "" : field.getText().trim();
+    }
+
+    private JComboBox<Integer> makeBirthYearBox() {
+        JComboBox<Integer> box = new JComboBox<>();
+        int currentYear = java.time.Year.now().getValue();
+        for (int year = currentYear; year >= MIN_BIRTH_YEAR; year--) {
+            box.addItem(year);
+        }
+
+        box.setBackground(BG_DEEP);
+        box.setForeground(TEXT_MAIN);
+        box.setFont(FONT_INPUT);
+        box.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        box.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER_COL),
+                new EmptyBorder(4, 8, 4, 8)
+        ));
+        box.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return box;
     }
 
     private void finish() {

@@ -9,6 +9,8 @@ import java.sql.Statement;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.ResultSet;
+import java.util.ArrayList;
+import java.util.List;
 
 public class UserDAO {
 
@@ -16,11 +18,13 @@ public class UserDAO {
         private final int user_id;
         private final String username;
         private final String email;
+        private final String role;
 
-        public LoggedInUser(int user_id, String username, String email) {
+        public LoggedInUser(int user_id, String username, String email, String role) {
             this.user_id = user_id;
             this.username = username;
             this.email = email;
+            this.role = role;
         }
 
         // Getters
@@ -34,6 +38,10 @@ public class UserDAO {
 
         public String getEmail() {
             return email;
+        }
+
+        public String getRole() {
+            return role;
         }
 
 
@@ -101,10 +109,39 @@ public class UserDAO {
         public boolean isPrivate() { return isPrivate; }
     }
 
+    public static class AdminUserRow {
+        private final int userId;
+        private final String username;
+        private final String email;
+        private final String role;
+        private final int postCount;
+        private final int commentCount;
+        private final int communityCount;
+
+        public AdminUserRow(int userId, String username, String email, String role,
+                            int postCount, int commentCount, int communityCount) {
+            this.userId = userId;
+            this.username = username;
+            this.email = email;
+            this.role = role;
+            this.postCount = postCount;
+            this.commentCount = commentCount;
+            this.communityCount = communityCount;
+        }
+
+        public int getUserId() { return userId; }
+        public String getUsername() { return username; }
+        public String getEmail() { return email; }
+        public String getRole() { return role; }
+        public int getPostCount() { return postCount; }
+        public int getCommentCount() { return commentCount; }
+        public int getCommunityCount() { return communityCount; }
+    }
+
 
     public LoggedInUser login(String username, String password) {
         String sql = """
-               SELECT user_id, username, email
+               SELECT user_id, username, email, role
                FROM Users
                WHERE username = ? AND password_hash = ?
                """;
@@ -139,7 +176,8 @@ public class UserDAO {
                         return new LoggedInUser(
                                 rs.getInt("user_id"),
                                 rs.getString("username"),
-                                rs.getString("email")
+                                rs.getString("email"),
+                                rs.getString("role")
                         );
                     }
                 }
@@ -202,7 +240,7 @@ public class UserDAO {
 
                 conn.commit();
 
-                LoggedInUser newUser = new LoggedInUser(newUserId, username, email);
+                LoggedInUser newUser = new LoggedInUser(newUserId, username, email, "user");
 
                 return new RegisterResult(true, "Successfully registered user", newUser);
 
@@ -309,5 +347,104 @@ public class UserDAO {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    public List<AdminUserRow> getAdminUserRows() {
+        List<AdminUserRow> users = new ArrayList<>();
+        String sql = """
+                SELECT
+                    u.user_id,
+                    u.username,
+                    u.email,
+                    u.role,
+                    COALESCE(p.post_count, 0) AS post_count,
+                    COALESCE(cm.comment_count, 0) AS comment_count,
+                    COALESCE(c.community_count, 0) AS community_count
+                FROM Users u
+                LEFT JOIN (
+                    SELECT posted_by, COUNT(*) AS post_count
+                    FROM Posts
+                    GROUP BY posted_by
+                ) p ON u.user_id = p.posted_by
+                LEFT JOIN (
+                    SELECT commenter_id, COUNT(*) AS comment_count
+                    FROM Comments
+                    GROUP BY commenter_id
+                ) cm ON u.user_id = cm.commenter_id
+                LEFT JOIN (
+                    SELECT created_by, COUNT(*) AS community_count
+                    FROM Communities
+                    GROUP BY created_by
+                ) c ON u.user_id = c.created_by
+                ORDER BY u.role DESC, u.username ASC
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                users.add(new AdminUserRow(
+                        rs.getInt("user_id"),
+                        rs.getString("username"),
+                        rs.getString("email"),
+                        rs.getString("role"),
+                        rs.getInt("post_count"),
+                        rs.getInt("comment_count"),
+                        rs.getInt("community_count")
+                ));
+            }
+
+        } catch (SQLException e) {
+            System.out.println("Admin users database error: " + e.getMessage());
+        }
+
+        return users;
+    }
+
+    public boolean deleteUserByAdmin(int adminUserId, int targetUserId) {
+        if (!isAdmin(adminUserId) || adminUserId == targetUserId) {
+            return false;
+        }
+
+        String sql = """
+                DELETE FROM Users
+                WHERE user_id = ? AND role <> 'admin'
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, targetUserId);
+            return stmt.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            System.out.println("Admin delete user database error: " + e.getMessage());
+        }
+
+        return false;
+    }
+
+    public boolean isAdmin(int userId) {
+        String sql = """
+                SELECT 1
+                FROM Users
+                WHERE user_id = ? AND role = 'admin'
+                LIMIT 1
+                """;
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
+
+        } catch (SQLException e) {
+            System.out.println("Admin check database error: " + e.getMessage());
+        }
+
+        return false;
     }
 }

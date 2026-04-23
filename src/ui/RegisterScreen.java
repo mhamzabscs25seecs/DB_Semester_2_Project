@@ -253,11 +253,58 @@ public class RegisterScreen extends JFrame {
         if (first.isEmpty() && last.isEmpty()) {
             SoundFX.error();
             showCyberError(this, "Missing Name", "Please enter at least a first name or last name.");
+            shake(firstNameField);
             return;
         }
-        if (username.isEmpty() || email.isEmpty() || pass.isEmpty()) {
+
+        if (username.isEmpty()) {
             SoundFX.error();
-            showCyberError(this, "Missing Data", "Please fill in all fields.");
+            showCyberError(this, "Missing Username", "Please choose a username.");
+            shake(usernameField);
+            return;
+        }
+        if (username.length() > 50) {
+            SoundFX.error();
+            showCyberError(this, "Username Too Long", "Username must be 50 characters or less.");
+            shake(usernameField);
+            return;
+        }
+        if (!isValidUsername(username)) {
+            SoundFX.error();
+            showCyberError(this, "Invalid Username", "Use only letters, numbers, underscores, or dots.");
+            shake(usernameField);
+            return;
+        }
+
+        if (email.isEmpty()) {
+            SoundFX.error();
+            showCyberError(this, "Missing Email", "Please enter your email address.");
+            shake(emailField);
+            return;
+        }
+        if (email.length() > 50) {
+            SoundFX.error();
+            showCyberError(this, "Email Too Long", "Email must be 50 characters or less.");
+            shake(emailField);
+            return;
+        }
+        if (!isValidEmail(email)) {
+            SoundFX.error();
+            showCyberError(this, "Invalid Email", "Please enter a valid email address.");
+            shake(emailField);
+            return;
+        }
+
+        if (pass.isEmpty()) {
+            SoundFX.error();
+            showCyberError(this, "Missing Password", "Please enter a password.");
+            shake(passwordField);
+            return;
+        }
+        if (confirm.isEmpty()) {
+            SoundFX.error();
+            showCyberError(this, "Missing Confirmation", "Please confirm your password.");
+            shake(confirmField);
             return;
         }
         if (!pass.equals(confirm)) {
@@ -269,11 +316,7 @@ public class RegisterScreen extends JFrame {
         if (pass.length() < 8) {
             SoundFX.error();
             showCyberError(this, "Weak Password", "Password must be at least 8 characters.");
-            return;
-        }
-        if (!isValidEmail(email)) {
-            SoundFX.error();
-            showCyberError(this, "Invalid Email", "Please enter a valid email.");
+            shake(passwordField);
             return;
         }
 
@@ -288,6 +331,7 @@ public class RegisterScreen extends JFrame {
 
         Session.login(result.getUser());
         SoundFX.success();
+        showSuccessDialog("Account Created", "Your Clixky account has been created successfully.");
 
         if (onRegisterSuccess != null) {
             dispose();
@@ -304,6 +348,54 @@ public class RegisterScreen extends JFrame {
 
     private boolean isValidEmail(String email) {
         return email.matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
+    }
+
+    private boolean isValidUsername(String username) {
+        return username.matches("^[A-Za-z0-9._]+$");
+    }
+
+    private void showSuccessDialog(String title, String message) {
+        JDialog dialog = new JDialog(this, "Clixky", Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setSize(380, 220);
+        dialog.setLocationRelativeTo(this);
+        dialog.setResizable(false);
+        dialog.setUndecorated(true);
+
+        JPanel panel = new RoundPanel(14, BG_PANEL, NEON_CYAN);
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createEmptyBorder(24, 28, 22, 28));
+
+        JLabel icon = new JLabel("OK");
+        icon.setAlignmentX(Component.CENTER_ALIGNMENT);
+        icon.setHorizontalAlignment(SwingConstants.CENTER);
+        icon.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        icon.setForeground(NEON_CYAN);
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        titleLabel.setForeground(NEON_CYAN);
+
+        JLabel messageLabel = new JLabel(message);
+        messageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        messageLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        messageLabel.setForeground(TEXT_MAIN);
+
+        JButton continueButton = makeButton("CONTINUE", BG_CARD, NEON_CYAN, BORDER_COL);
+        continueButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        continueButton.setMaximumSize(new Dimension(180, 38));
+        continueButton.addActionListener(e -> dialog.dispose());
+
+        panel.add(icon);
+        panel.add(Box.createVerticalStrut(10));
+        panel.add(titleLabel);
+        panel.add(Box.createVerticalStrut(8));
+        panel.add(messageLabel);
+        panel.add(Box.createVerticalStrut(22));
+        panel.add(continueButton);
+
+        dialog.setContentPane(panel);
+        dialog.setVisible(true);
     }
 
     public static void main(String[] args) {

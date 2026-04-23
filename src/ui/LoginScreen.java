@@ -27,6 +27,8 @@ public class LoginScreen extends JFrame {
     static Font  FONT_INPUT = new Font("Segoe UI", Font.PLAIN, 16);
     static Font  FONT_BTN   = new Font("Segoe UI", Font.BOLD,  14);
     static Font  FONT_SMALL = new Font("Segoe UI", Font.PLAIN, 13);
+    private static float FONT_SCALE = 1.0f;
+    private static boolean zoomShortcutsInstalled = false;
 
     static void setLightMode(boolean enabled) {
         LIGHT_MODE = enabled;
@@ -56,6 +58,88 @@ public class LoginScreen extends JFrame {
             TEXT_MAIN  = new Color(200, 220, 255);
             TEXT_MUTED = new Color(90,  100, 160);
         }
+    }
+
+    static void installGlobalFontZoomShortcuts() {
+        if (zoomShortcutsInstalled) {
+            return;
+        }
+
+        zoomShortcutsInstalled = true;
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(e -> {
+            if (e.getID() != KeyEvent.KEY_PRESSED || !isZoomModifierDown(e)) {
+                return false;
+            }
+
+            int key = e.getKeyCode();
+            if (key == KeyEvent.VK_EQUALS || key == KeyEvent.VK_PLUS || key == KeyEvent.VK_ADD) {
+                adjustFontScale(0.1f);
+                return true;
+            }
+            if (key == KeyEvent.VK_MINUS || key == KeyEvent.VK_SUBTRACT) {
+                adjustFontScale(-0.1f);
+                return true;
+            }
+            if (key == KeyEvent.VK_0) {
+                FONT_SCALE = 1.0f;
+                applyFontScaleToOpenWindows();
+                return true;
+            }
+
+            return false;
+        });
+
+        Toolkit.getDefaultToolkit().addAWTEventListener(event -> {
+            if (event instanceof WindowEvent windowEvent
+                    && windowEvent.getID() == WindowEvent.WINDOW_OPENED) {
+                applyFontScale(windowEvent.getWindow());
+            }
+        }, AWTEvent.WINDOW_EVENT_MASK);
+    }
+
+    private static boolean isZoomModifierDown(KeyEvent e) {
+        return e.isControlDown() || e.isMetaDown();
+    }
+
+    private static void adjustFontScale(float delta) {
+        FONT_SCALE = Math.max(0.8f, Math.min(1.6f, FONT_SCALE + delta));
+        applyFontScaleToOpenWindows();
+    }
+
+    private static void applyFontScaleToOpenWindows() {
+        for (Window window : Window.getWindows()) {
+            applyFontScale(window);
+        }
+    }
+
+    private static void applyFontScale(Component component) {
+        if (component == null) {
+            return;
+        }
+
+        Font font = component.getFont();
+        if (font != null) {
+            Font baseFont = font;
+            if (component instanceof JComponent jComponent) {
+                Object stored = jComponent.getClientProperty("clixky.baseFont");
+                if (stored instanceof Font storedFont) {
+                    baseFont = storedFont;
+                } else {
+                    jComponent.putClientProperty("clixky.baseFont", font);
+                }
+            }
+            component.setFont(baseFont.deriveFont(baseFont.getSize2D() * FONT_SCALE));
+        }
+
+        if (component instanceof Container container) {
+            for (Component child : container.getComponents()) {
+                applyFontScale(child);
+            }
+        }
+
+        component.invalidate();
+        component.validate();
+        component.repaint();
     }
 
     private JTextField     usernameField;
@@ -525,6 +609,173 @@ public class LoginScreen extends JFrame {
 
         dialog.setContentPane(panel);
         dialog.setVisible(true);
+    }
+
+    static boolean showCyberConfirm(Component parent, String title, String message, String confirmText) {
+        Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
+        JDialog dialog = new JDialog(owner, "Clixky Confirm", Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setSize(390, 230);
+        dialog.setLocationRelativeTo(parent);
+        dialog.setResizable(false);
+        dialog.setUndecorated(true);
+
+        boolean[] confirmed = {false};
+
+        JPanel panel = new RoundPanel(14, BG_PANEL, NEON_PINK);
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createEmptyBorder(24, 28, 22, 28));
+
+        JLabel icon = new JLabel("!");
+        icon.setAlignmentX(Component.CENTER_ALIGNMENT);
+        icon.setHorizontalAlignment(SwingConstants.CENTER);
+        icon.setFont(new Font("Segoe UI", Font.BOLD, 30));
+        icon.setForeground(NEON_PINK);
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        titleLabel.setForeground(NEON_PINK);
+
+        JLabel messageLabel = new JLabel("<html><body style='width:300px; text-align:center; color:" + htmlColor(TEXT_MAIN)
+                + "; font-family:Segoe UI; font-size:12px'>" + escapeHtml(message) + "</body></html>");
+        messageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JPanel buttons = new JPanel(new GridLayout(1, 2, 10, 0));
+        buttons.setOpaque(false);
+        buttons.setMaximumSize(new Dimension(270, 38));
+        buttons.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JButton cancelButton = makeButton("CANCEL", BG_CARD, TEXT_MUTED, BORDER_COL);
+        JButton confirmButton = makeButton(confirmText, BG_CARD, NEON_PINK, BORDER_COL);
+        cancelButton.addActionListener(e -> dialog.dispose());
+        confirmButton.addActionListener(e -> {
+            confirmed[0] = true;
+            dialog.dispose();
+        });
+
+        buttons.add(cancelButton);
+        buttons.add(confirmButton);
+
+        panel.add(icon);
+        panel.add(Box.createVerticalStrut(8));
+        panel.add(titleLabel);
+        panel.add(Box.createVerticalStrut(8));
+        panel.add(messageLabel);
+        panel.add(Box.createVerticalStrut(22));
+        panel.add(buttons);
+
+        dialog.setContentPane(panel);
+        dialog.setVisible(true);
+        return confirmed[0];
+    }
+
+    static class ReportInput {
+        private final String reason;
+        private final String details;
+
+        ReportInput(String reason, String details) {
+            this.reason = reason;
+            this.details = details;
+        }
+
+        String getReason() { return reason; }
+        String getDetails() { return details; }
+    }
+
+    static ReportInput showReportDialog(Component parent, String targetName) {
+        Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
+        JDialog dialog = new JDialog(owner, "Report", Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setSize(430, 360);
+        dialog.setLocationRelativeTo(parent);
+        dialog.setResizable(false);
+        dialog.setUndecorated(true);
+
+        ReportInput[] result = {null};
+
+        JPanel panel = new RoundPanel(14, BG_PANEL, NEON_PINK);
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createEmptyBorder(24, 28, 24, 28));
+
+        JLabel title = new JLabel("Report " + targetName);
+        title.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        title.setForeground(NEON_PINK);
+        title.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JComboBox<String> reasonBox = new JComboBox<>(new String[]{
+                "Spam",
+                "Harassment",
+                "Inappropriate content",
+                "Misinformation",
+                "Other"
+        });
+        reasonBox.setBackground(BG_DEEP);
+        reasonBox.setForeground(TEXT_MAIN);
+        reasonBox.setFont(FONT_INPUT);
+        reasonBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        reasonBox.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JTextArea detailsArea = new JTextArea(5, 24);
+        detailsArea.setBackground(BG_DEEP);
+        detailsArea.setForeground(TEXT_MAIN);
+        detailsArea.setCaretColor(NEON_CYAN);
+        detailsArea.setFont(FONT_INPUT);
+        detailsArea.setLineWrap(true);
+        detailsArea.setWrapStyleWord(true);
+        detailsArea.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER_COL),
+                BorderFactory.createEmptyBorder(8, 10, 8, 10)
+        ));
+        JScrollPane detailsScroll = new JScrollPane(detailsArea);
+        detailsScroll.setBorder(null);
+        detailsScroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, 110));
+        detailsScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel buttons = new JPanel(new GridLayout(1, 2, 10, 0));
+        buttons.setOpaque(false);
+        buttons.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+        JButton cancel = makeButton("CANCEL", BG_CARD, TEXT_MUTED, BORDER_COL);
+        JButton submit = makeButton("SUBMIT REPORT", BG_CARD, NEON_PINK, BORDER_COL);
+        cancel.addActionListener(e -> dialog.dispose());
+        submit.addActionListener(e -> {
+            result[0] = new ReportInput((String) reasonBox.getSelectedItem(), detailsArea.getText().trim());
+            dialog.dispose();
+        });
+        buttons.add(cancel);
+        buttons.add(submit);
+
+        panel.add(title);
+        panel.add(Box.createVerticalStrut(18));
+        panel.add(makeLabel("REASON"));
+        panel.add(Box.createVerticalStrut(6));
+        panel.add(reasonBox);
+        panel.add(Box.createVerticalStrut(14));
+        panel.add(makeLabel("DETAILS"));
+        panel.add(Box.createVerticalStrut(6));
+        panel.add(detailsScroll);
+        panel.add(Box.createVerticalStrut(18));
+        panel.add(buttons);
+
+        dialog.setContentPane(panel);
+        dialog.setVisible(true);
+        return result[0];
+    }
+
+    static String escapeHtml(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+
+        return text
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;")
+                .replace("\n", "<br>");
+    }
+
+    static String htmlColor(Color color) {
+        return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
     }
 
     static void shake(Component c) {

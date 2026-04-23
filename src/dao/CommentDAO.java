@@ -13,15 +13,17 @@ public class CommentDAO {
     public static class CommentRecord {
         private final int commentId;
         private final int parentCommentId;
+        private final int authorId;
         private final String author;
         private final String body;
         private final String commentedAt;
         private final int score;
 
-        public CommentRecord(int commentId, int parentCommentId, String author,
+        public CommentRecord(int commentId, int parentCommentId, int authorId, String author,
                              String body, String commentedAt, int score) {
             this.commentId = commentId;
             this.parentCommentId = parentCommentId;
+            this.authorId = authorId;
             this.author = author;
             this.body = body;
             this.commentedAt = commentedAt;
@@ -30,6 +32,7 @@ public class CommentDAO {
 
         public int getCommentId() { return commentId; }
         public int getParentCommentId() { return parentCommentId; }
+        public int getAuthorId() { return authorId; }
         public String getAuthor() { return author; }
         public String getBody() { return body; }
         public String getCommentedAt() { return commentedAt; }
@@ -43,6 +46,7 @@ public class CommentDAO {
                 SELECT
                     cm.comment_id,
                     COALESCE(cm.parent_comment_id, 0) AS parent_comment_id,
+                    cm.commenter_id,
                     u.username,
                     cm.comment_body,
                     cm.commented_at,
@@ -51,7 +55,7 @@ public class CommentDAO {
                 JOIN Users u ON cm.commenter_id = u.user_id
                 LEFT JOIN Comment_Votes cv ON cm.comment_id = cv.comment_id
                 WHERE cm.post_id = ?
-                GROUP BY cm.comment_id, cm.parent_comment_id, u.username, cm.comment_body, cm.commented_at
+                GROUP BY cm.comment_id, cm.parent_comment_id, cm.commenter_id, u.username, cm.comment_body, cm.commented_at
                 ORDER BY cm.commented_at ASC
                 """;
 
@@ -65,6 +69,7 @@ public class CommentDAO {
                     comments.add(new CommentRecord(
                             rs.getInt("comment_id"),
                             rs.getInt("parent_comment_id"),
+                            rs.getInt("commenter_id"),
                             rs.getString("username"),
                             rs.getString("comment_body"),
                             rs.getString("commented_at"),
@@ -117,7 +122,15 @@ public class CommentDAO {
     public boolean deleteComment(int commentId, int userId) {
         String sql = """
                 DELETE FROM Comments
-                WHERE comment_id = ? AND commenter_id = ?
+                WHERE comment_id = ?
+                  AND (
+                        commenter_id = ?
+                        OR EXISTS (
+                            SELECT 1
+                            FROM Users
+                            WHERE user_id = ? AND role = 'admin'
+                        )
+                  )
                 """;
 
         try (Connection conn = DBConnection.getConnection();
@@ -125,6 +138,7 @@ public class CommentDAO {
 
             stmt.setInt(1, commentId);
             stmt.setInt(2, userId);
+            stmt.setInt(3, userId);
             return stmt.executeUpdate() > 0;
 
         } catch (SQLException e) {

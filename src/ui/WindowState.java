@@ -15,16 +15,16 @@ public class WindowState {
         if (appBounds == null) {
             frame.setSize(defaultSize);
             frame.setLocationRelativeTo(null);
-            return;
+        } else {
+            frame.setBounds(appBounds);
         }
 
-        frame.setBounds(appBounds);
         frame.setExtendedState(appExtendedState);
     }
 
     public static void remember(JFrame frame) {
         int state = frame.getExtendedState();
-        if ((state & JFrame.MAXIMIZED_BOTH) == 0) {
+        if ((state & JFrame.MAXIMIZED_BOTH) == 0 || appBounds == null) {
             appBounds = frame.getBounds();
         }
         appExtendedState = state;

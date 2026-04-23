@@ -7,6 +7,8 @@ BEGIN TRANSACTION;
 
 -- Optional cleanup so this script can be re-run safely.
 DELETE FROM Comment_Votes;
+DELETE FROM Reports;
+DELETE FROM Saved_Posts;
 DELETE FROM Post_Votes;
 DELETE FROM Comments;
 DELETE FROM Posts;
@@ -25,18 +27,19 @@ WHERE name IN (
 	'Posts',
 	'Comments',
 	'Post_Votes',
-	'Comment_Votes'
+	'Comment_Votes',
+	'Reports'
 );
 
-INSERT INTO Users (user_id, username, email, password_hash, created_at) VALUES
-(1, 'ali_codes', 'ali@clixky.app', 'hash_ali_001', '2026-01-10 09:15:00'),
-(2, 'sara_dev', 'sara@clixky.app', 'hash_sara_002', '2026-01-11 11:20:00'),
-(3, 'hamza_db', 'hamza@clixky.app', 'hash_hamza_003', '2026-01-14 15:05:00'),
-(4, 'noor_ui', 'noor@clixky.app', 'hash_noor_004', '2026-01-16 17:45:00'),
-(5, 'zain_ml', 'zain@clixky.app', 'hash_zain_005', '2026-01-20 08:35:00'),
-(6, 'maria_net', 'maria@clixky.app', 'hash_maria_006', '2026-01-21 21:10:00'),
-(7, 'omar_linux', 'omar@clixky.app', 'hash_omar_007', '2026-01-23 10:00:00'),
-(8, 'huda_stats', 'huda@clixky.app', 'hash_huda_008', '2026-01-25 13:30:00');
+INSERT INTO Users (user_id, username, email, password_hash, role, created_at) VALUES
+(1, 'ali_codes', 'ali@clixky.app', 'hash_ali_001', 'user', '2026-01-10 09:15:00'),
+(2, 'sara_dev', 'sara@clixky.app', 'hash_sara_002', 'user', '2026-01-11 11:20:00'),
+(3, 'hamza_db', 'hamza@clixky.app', 'hash_hamza_003', 'admin', '2026-01-14 15:05:00'),
+(4, 'noor_ui', 'noor@clixky.app', 'hash_noor_004', 'user', '2026-01-16 17:45:00'),
+(5, 'zain_ml', 'zain@clixky.app', 'hash_zain_005', 'user', '2026-01-20 08:35:00'),
+(6, 'maria_net', 'maria@clixky.app', 'hash_maria_006', 'user', '2026-01-21 21:10:00'),
+(7, 'omar_linux', 'omar@clixky.app', 'hash_omar_007', 'user', '2026-01-23 10:00:00'),
+(8, 'huda_stats', 'huda@clixky.app', 'hash_huda_008', 'user', '2026-01-25 13:30:00');
 
 INSERT INTO User_Profiles (user_id, display_name, bio_text, country, phone_no, birth_year, is_private) VALUES
 (1, 'Ali', 'Backend and database enthusiast.', 'Pakistan', '+92-300-1111111', 2002, 0),
